@@ -31,15 +31,47 @@ async function run() {
     const usersCollection = db.collection("users");
     const agentCollection = db.collection("agents");
 
+// get user role
+app.get('/users/:email/role', async(req,res)=>{
+  const email = req.params.email;
+  if(!email){
+    return res.status(400).send({message: "email is required"})
+  }
+  const user = await usersCollection.findOne({email});
+  if(!user){
+    return res.status(404).send({message: 'user not found'})
+  }
+  res.send({role:user.role || 'user'})
+})
+
+// user er My profile
+ app.get("/profile", async (req, res) => {
+    const email = req.query.email;
+    if (!email) return res.status(400).json({ error: "Email required" });
+
+    try {
+      const user = await usersCollection.findOne({ email });
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      res.json({
+        name: user.name,
+        image: user.image,
+        role: user.role,
+        email: user.email,
+        phone: user.phone || "",
+      });
+    } catch (err) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+
 // All properties
      app.get('/allProperties',async(req,res)=>{
         const all = req.query
         const result = await agentCollection.find(all).toArray()
         res.send(result)
      })
-     
-
-
 
 
     // user=========================
@@ -75,6 +107,8 @@ async function run() {
       }
     });
 
+
+    // add property er form post
     app.post("/addProperty", async (req, res) => {
       try {
         const add = req.body;
