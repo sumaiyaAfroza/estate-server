@@ -11,7 +11,6 @@ app.use(cors());
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nkqgssx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-// const uri = `mongodb+srv://${process.env.USER_DB}:${process.env.SECRET_KEY}@cluster0.a3jeczi.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -44,6 +43,8 @@ app.get('/users/:email/role', async(req,res)=>{
   res.send({role:user.role || 'user'})
 })
 
+
+
 // user er My profile
  app.get("/profile", async (req, res) => {
     const email = req.query.email;
@@ -66,12 +67,18 @@ app.get('/users/:email/role', async(req,res)=>{
   });
 
 
+
+
+
 // All properties
-     app.get('/allProperties',async(req,res)=>{
-        const all = req.query
-        const result = await agentCollection.find(all).toArray()
-        res.send(result)
-     })
+     app.get('/allProperties', async (req, res) => {
+  const { location, sort } = req.query;
+  const query = location ? { location: { $regex: location, $options: 'i' } } : {};
+  const sortOption = sort === 'asc' ? { price: 1 } : sort === 'desc' ? { price: -1 } : {};
+
+  const result = await agentCollection.find(query).sort(sortOption).toArray();
+  res.send(result);
+});
 
 
     // user=========================
@@ -120,6 +127,7 @@ app.get('/users/:email/role', async(req,res)=>{
       }
     });
 
+    
     app.delete("/property/:id", async (req, res) => {
       const id = new ObjectId(req.params.id);
       const result = await agentCollection.deleteOne({ _id: id });
