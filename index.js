@@ -46,8 +46,6 @@ async function run() {
     });
 
     // admin==============
-// ................
-// Add these routes to your existing server code
 
 // Get all users
 app.get('/users', async (req, res) => {
@@ -151,7 +149,6 @@ app.delete('/firebaseUser/:email', async (req, res) => {
     res.status(500).json({ error: 'Failed to delete Firebase user' });
   }
 });
-
 
 
     // user er My profile
