@@ -67,9 +67,6 @@ app.get('/users/:email/role', async(req,res)=>{
   });
 
 
-
-
-
 // All properties
      app.get('/allProperties', async (req, res) => {
   const { location, sort } = req.query;
@@ -78,6 +75,23 @@ app.get('/users/:email/role', async(req,res)=>{
 
   const result = await agentCollection.find(query).sort(sortOption).toArray();
   res.send(result);
+});
+
+// property Details
+app.get("/properties/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const property = await agentCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!property) {
+      return res.status(404).json({ error: "Property not found" });
+    }
+    console.log(property);
+
+    res.send(property);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch property" });
+  }
 });
 
 
@@ -103,7 +117,6 @@ app.get('/users/:email/role', async(req,res)=>{
         if (!email) {
           return res.status(400).send({ message: "Email query is required" });
         }
-
         const result = await agentCollection
           .find({ agentEmail: email })
           .toArray();
