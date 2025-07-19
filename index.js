@@ -29,73 +29,107 @@ async function run() {
     const db = client.db("Estate-db");
     const usersCollection = db.collection("users");
     const agentCollection = db.collection("agents");
+    const wishListCollection = db.collection("wishList");
 
-// get user role
-app.get('/users/:email/role', async(req,res)=>{
-  const email = req.params.email;
-  if(!email){
-    return res.status(400).send({message: "email is required"})
-  }
-  const user = await usersCollection.findOne({email});
-  if(!user){
-    return res.status(404).send({message: 'user not found'})
-  }
-  res.send({role:user.role || 'user'})
-})
-
-
-
-// user er My profile
- app.get("/profile", async (req, res) => {
-    const email = req.query.email;
-    if (!email) return res.status(400).json({ error: "Email required" });
-
-    try {
+    // get user role
+    app.get("/users/:email/role", async (req, res) => {
+      const email = req.params.email;
+      if (!email) {
+        return res.status(400).send({ message: "email is required" });
+      }
       const user = await usersCollection.findOne({ email });
-      if (!user) return res.status(404).json({ error: "User not found" });
+      if (!user) {
+        return res.status(404).send({ message: "user not found" });
+      }
+      res.send({ role: user.role || "user" });
+    });
 
-      res.json({
-        name: user.name,
-        image: user.image,
-        role: user.role,
-        email: user.email,
-        phone: user.phone || "",
-      });
-    } catch (err) {
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
+    // user er My profile
+    app.get("/profile", async (req, res) => {
+      const email = req.query.email;
+      if (!email) return res.status(400).json({ error: "Email required" });
 
+      try {
+        const user = await usersCollection.findOne({ email });
+        if (!user) return res.status(404).json({ error: "User not found" });
 
-// All properties
-     app.get('/allProperties', async (req, res) => {
-  const { location, sort } = req.query;
-  const query = location ? { location: { $regex: location, $options: 'i' } } : {};
-  const sortOption = sort === 'asc' ? { price: 1 } : sort === 'desc' ? { price: -1 } : {};
+        res.json({
+          name: user.name,
+          image: user.image,
+          role: user.role,
+          email: user.email,
+          phone: user.phone || "",
+        });
+      } catch (err) {
+        res.status(500).json({ error: "Internal server error" });
+      }
+    });
 
-  const result = await agentCollection.find(query).sort(sortOption).toArray();
-  res.send(result);
-});
+    // All properties
+    app.get("/allProperties", async (req, res) => {
+      const { location, sort } = req.query;
+      const query = location
+        ? { location: { $regex: location, $options: "i" } }
+        : {};
+      const sortOption =
+        sort === "asc" ? { price: 1 } : sort === "desc" ? { price: -1 } : {};
 
-// property Details
-app.get("/properties/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-    const property = await agentCollection.findOne({ _id: new ObjectId(id) });
+      const result = await agentCollection
+        .find(query)
+        .sort(sortOption)
+        .toArray();
+      res.send(result);
+    });
 
-    if (!property) {
-      return res.status(404).json({ error: "Property not found" });
-    }
-    console.log(property);
+    // property Details
+    app.get("/properties/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const property = await agentCollection.findOne({
+          _id: new ObjectId(id),
+        });
 
-    res.send(property);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch property" });
-  }
-});
+        if (!property) {
+          return res.status(404).json({ error: "Property not found" });
+        }
+        console.log(property);
 
+        res.send(property);
+      } catch (error) {
+        res.status(500).json({ error: "Failed to fetch property" });
+      }
+    });
 
     // user=========================
+
+// wishlist er get 
+    app.get("/wishlist", async (req, res) => {
+      const email = req.query.email;
+      const result = await wishListCollection .find({ AgentEmail: email }) .toArray();
+      res.send(result);
+    });
+
+
+
+    // In wishlist.post routes.js
+    app.post("/wishlist", async (req, res) => {
+      const wishlistItem = req.body;
+
+      // check duplicate (optional)
+      const exists = await wishListCollection.findOne({
+        userEmail: wishlistItem.userEmail,
+        propertyId: wishlistItem.propertyId,
+      });
+
+      if (exists) {
+        return res.status(400).send({ message: "Already in wishlist" });
+      }
+
+      const result = await wishListCollection.insertOne(wishlistItem);
+      res.send(result);
+    });
+
+    //
     app.post("/users", async (req, res) => {
       const email = req.body.email;
       const existingUser = await usersCollection.findOne({ email });
@@ -127,7 +161,6 @@ app.get("/properties/:id", async (req, res) => {
       }
     });
 
-
     // add property er form post
     app.post("/addProperty", async (req, res) => {
       try {
@@ -140,20 +173,21 @@ app.get("/properties/:id", async (req, res) => {
       }
     });
 
-    
+    // agent property delete
     app.delete("/property/:id", async (req, res) => {
       const id = new ObjectId(req.params.id);
       const result = await agentCollection.deleteOne({ _id: id });
       res.send(result);
     });
 
-    //  update er get
+    //agent property update er get
     app.get("/property/:id", async (req, res) => {
       const id = new ObjectId(req.params.id);
       const result = await agentCollection.findOne({ _id: id });
       res.send(result);
     });
 
+    // update jonno
     app.put("/property/:id", async (req, res) => {
       const id = new ObjectId(req.params.id);
       const updateDoc = {
