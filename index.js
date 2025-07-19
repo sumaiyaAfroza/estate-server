@@ -30,6 +30,7 @@ async function run() {
     const usersCollection = db.collection("users");
     const agentCollection = db.collection("agents");
     const wishListCollection = db.collection("wishList");
+    const reviewsCollection =db.collection('reviews')
 
     // get user role
     app.get("/users/:email/role", async (req, res) => {
@@ -43,6 +44,115 @@ async function run() {
       }
       res.send({ role: user.role || "user" });
     });
+
+    // admin==============
+// ................
+// Add these routes to your existing server code
+
+// Get all users
+app.get('/users', async (req, res) => {
+  try {
+    const users = await usersCollection.find().toArray();
+    res.send(users);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Update user role
+app.patch('/users/:email/role', async (req, res) => {
+  try {
+    const email = req.params.email;
+    const { role } = req.body;
+
+    if (!['admin', 'agent', 'user'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+
+    const result = await usersCollection.updateOne(
+      { email },
+      { $set: { role } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.send({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update user role' });
+  }
+});
+
+// Mark user as fraud
+app.patch('/users/:email/fraud', async (req, res) => {
+  try {
+    const email = req.params.email;
+
+    // Start a transaction
+    const session = client.startSession();
+    
+    try {
+      await session.withTransaction(async () => {
+        // 1. Mark user as fraud
+        const userResult = await usersCollection.updateOne(
+          { email },
+          { $set: { fraud: true, role: 'user' } },
+          { session }
+        );
+
+        if (userResult.matchedCount === 0) {
+          throw new Error('User not found');
+        }
+
+        // 2. Delete all properties by this agent
+        await agentCollection.deleteMany(
+          { agentEmail: email },
+          { session }
+        );
+      });
+      
+      res.send({ success: true });
+    } finally {
+      await session.endSession();
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Failed to mark as fraud' });
+  }
+});
+
+// Delete user
+app.delete('/users/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
+    
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.send({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// Delete Firebase user (this would be handled by a Firebase Cloud Function)
+// You'll need to create a separate endpoint that calls Firebase Admin SDK
+app.delete('/firebaseUser/:email', async (req, res) => {
+  try {
+    const email = req.params.email;
+    
+    // In a real implementation, you would call Firebase Admin SDK here
+    // This is just a placeholder - you'll need to implement the actual Firebase deletion
+    
+    res.send({ success: true, message: `Firebase user ${email} would be deleted in production` });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete Firebase user' });
+  }
+});
+
+
 
     // user er My profile
     app.get("/profile", async (req, res) => {
@@ -102,14 +212,33 @@ async function run() {
 
     // user=========================
 
-// wishlist er get 
+    // wishlist er get
     app.get("/wishlist", async (req, res) => {
       const email = req.query.email;
-      const result = await wishListCollection .find({ AgentEmail: email }) .toArray();
+      const result = await wishListCollection
+        .find({ AgentEmail: email })
+        .toArray();
       res.send(result);
     });
 
 
+// make offer er id
+    // Add this route to your server code
+app.get("/wishlistProperty/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const property = await agentCollection.findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!property) {
+      return res.status(404).json({ error: "Property not found" });
+    }
+    res.send(property);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch property" });
+  }
+});
 
     // In wishlist.post routes.js
     app.post("/wishlist", async (req, res) => {
@@ -129,7 +258,16 @@ async function run() {
       res.send(result);
     });
 
-    //
+    // wishlist delete
+    app.delete("/wishlistDelete/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await wishListCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+      res.send(result);
+    });
+
+    //  register kora gular api
     app.post("/users", async (req, res) => {
       const email = req.body.email;
       const existingUser = await usersCollection.findOne({ email });
@@ -140,6 +278,9 @@ async function run() {
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
+
+
+
 
     // agents site ===================
 
@@ -201,6 +342,7 @@ async function run() {
       const result = await agentCollection.updateOne({ _id: id }, updateDoc);
       res.send(result);
     });
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
