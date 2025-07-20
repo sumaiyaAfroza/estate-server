@@ -32,6 +32,7 @@ async function run() {
     const wishListCollection = db.collection("wishList");
     const reviewsCollection = db.collection("reviews");
     const offerCollection = db.collection("offers");
+    const propertyCollection = db.collection("property");
 
     // get user role
     app.get("/users/:email/role", async (req, res) => {
@@ -279,13 +280,6 @@ async function run() {
       }
     });
 
-
-
-   
-
-
-
-
     // admin==============
 
     // Get all users
@@ -398,6 +392,31 @@ async function run() {
       }
     });
 
+    // manage properties
+    app.get("/properties/manage", async (req, res) => {
+      try {
+        const result = await agentCollection
+          .find({})
+          .project({
+            title: 1,
+            location: 1,
+            agentName: 1,
+            agentEmail: 1,
+            price: 1,
+            status: 1,
+          }) // return only necessary fields
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching properties:", error);
+        res.status(500).send({ message: "Failed to fetch properties" });
+      }
+    });
+
+    // vefiry id
+
+    //  reject
+
     // user=========================
     // make offer er id
     // Add this route to your server code
@@ -504,105 +523,103 @@ async function run() {
       res.send(result);
     });
 
-
     // ---
-     // requested property
+    // requested property
     app.get("/offers/agent", async (req, res) => {
-  const { email } = req.query;
-  try {
-    const result = await offerCollection
-      .find({ agentEmail: email })
-      .toArray();
-    console.log(result);
-    res.send(result);
-  } catch (error) {
-    res.status(500).send({ message: "Failed to fetch offers" });
-  }
-});
+      const { email } = req.query;
+      try {
+        const result = await offerCollection
+          .find({ agentEmail: email })
+          .toArray();
+        console.log(result);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch offers" });
+      }
+    });
 
     // PATCH: Accept an offer
-app.patch('/offers/accept/:id', async (req, res) => {
-  try {
-    const id = req.params.id;
-    const { propertyId } = req.body;
+    app.patch("/offers/accept/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { propertyId } = req.body;
 
-    // Validate input
-    if (!ObjectId.isValid(id)) {
-      return res.status(400).send({ success: false, message: "Invalid offer ID" });
-    }
+        // Validate input
+        if (!ObjectId.isValid(id)) {
+          return res
+            .status(400)
+            .send({ success: false, message: "Invalid offer ID" });
+        }
 
-    // Update offer status to accepted
-    const result = await offerCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { status: "accepted" } }
-    );
+        // Update offer status to accepted
+        const result = await offerCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: "accepted" } }
+        );
 
-    if (result.matchedCount === 0) {
-      return res.status(404).send({ success: false, message: "Offer not found" });
-    }
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Offer not found" });
+        }
 
-    // Optionally update property status if needed
-    if (propertyId) {
-      await agentCollection.updateOne(
-        { _id: new ObjectId(propertyId) },
-        { $set: { status: "sold" } }
-      );
-    }
+        // Optionally update property status if needed
+        if (propertyId) {
+          await agentCollection.updateOne(
+            { _id: new ObjectId(propertyId) },
+            { $set: { status: "sold" } }
+          );
+        }
 
-    res.send({ 
-      success: true,
-      message: "Offer accepted successfully"
+        res.send({
+          success: true,
+          message: "Offer accepted successfully",
+        });
+      } catch (error) {
+        console.error("Error accepting offer:", error);
+        res.status(500).send({
+          success: false,
+          message: "Internal server error",
+        });
+      }
     });
 
-  } catch (error) {
-    console.error("Error accepting offer:", error);
-    res.status(500).send({ 
-      success: false,
-      message: "Internal server error" 
+    // PATCH: Reject an offer
+    app.patch("/offers/reject/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        // Validate input
+        if (!ObjectId.isValid(id)) {
+          return res
+            .status(400)
+            .send({ success: false, message: "Invalid offer ID" });
+        }
+
+        // Update offer status to rejected
+        const result = await offerCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: "rejected" } }
+        );
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Offer not found" });
+        }
+
+        res.send({
+          success: true,
+          message: "Offer rejected successfully",
+        });
+      } catch (error) {
+        console.error("Error rejecting offer:", error);
+        res.status(500).send({
+          success: false,
+          message: "Internal server error",
+        });
+      }
     });
-  }
-});
-
-// PATCH: Reject an offer
-app.patch('/offers/reject/:id', async (req, res) => {
-  try {
-    const id = req.params.id;
-
-    // Validate input
-    if (!ObjectId.isValid(id)) {
-      return res.status(400).send({ success: false, message: "Invalid offer ID" });
-    }
-
-    // Update offer status to rejected
-    const result = await offerCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { status: "rejected" } }
-    );
-
-    if (result.matchedCount === 0) {
-      return res.status(404).send({ success: false, message: "Offer not found" });
-    }
-
-    res.send({ 
-      success: true,
-      message: "Offer rejected successfully"
-    });
-
-  } catch (error) {
-    console.error("Error rejecting offer:", error);
-    res.status(500).send({ 
-      success: false,
-      message: "Internal server error" 
-    });
-  }
-});
-
-
-
-
-
-
-
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
