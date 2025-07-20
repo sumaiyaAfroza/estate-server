@@ -30,7 +30,7 @@ async function run() {
     const usersCollection = db.collection("users");
     const agentCollection = db.collection("agents");
     const wishListCollection = db.collection("wishList");
-    const reviewsCollection =db.collection('reviews')
+    const reviewsCollection = db.collection("reviews");
 
     // get user role
     app.get("/users/:email/role", async (req, res) => {
@@ -45,111 +45,163 @@ async function run() {
       res.send({ role: user.role || "user" });
     });
 
+// Get latest reviews
+app.get("/reviews/latest", async (req, res) => {
+  try {
+    const reviews = await reviewsCollection.aggregate([
+      {
+        $sort: { date: -1 } // Sort by newest first
+      },
+      {
+        $limit: 5 // Get 5 most recent reviews
+      },
+      {
+        $lookup: {
+          from: "properties", // Collection name for properties
+          localField: "propertyId",
+          foreignField: "_id",
+          as: "property"
+        }
+      },
+      {
+        $unwind: "$property" // Convert array to object
+      },
+      {
+        $project: {
+          _id: 1,
+          reviewer: 1,
+          reviewerImage: 1,
+          comment: 1,
+          date: 1,
+          propertyTitle: "$property.title",
+          propertyId: 1
+        }
+      }
+    ]).toArray();
+
+    res.status(200).json(reviews);
+  } catch (error) {
+    console.error("Error fetching latest reviews:", error);
+    res.status(500).json({ error: "Failed to fetch latest reviews" });
+  }
+});
+
+
+
+
+
+
     // admin==============
 
-// Get all users
-app.get('/users', async (req, res) => {
-  try {
-    const users = await usersCollection.find().toArray();
-    res.send(users);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch users' });
-  }
-});
+    // Get all users
+    app.get("/users", async (req, res) => {
+      try {
+        const users = await usersCollection.find().toArray();
+        res.send(users);
+      } catch (error) {
+        res.status(500).json({ error: "Failed to fetch users" });
+      }
+    });
 
-// Update user role
-app.patch('/users/:email/role', async (req, res) => {
-  try {
-    const email = req.params.email;
-    const { role } = req.body;
+    // Update user role
+    app.patch("/users/:email/role", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const { role } = req.body;
 
-    if (!['admin', 'agent', 'user'].includes(role)) {
-      return res.status(400).json({ error: 'Invalid role' });
-    }
-
-    const result = await usersCollection.updateOne(
-      { email },
-      { $set: { role } }
-    );
-
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.send({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update user role' });
-  }
-});
-
-// Mark user as fraud
-app.patch('/users/:email/fraud', async (req, res) => {
-  try {
-    const email = req.params.email;
-
-    // Start a transaction
-    const session = client.startSession();
-    
-    try {
-      await session.withTransaction(async () => {
-        // 1. Mark user as fraud
-        const userResult = await usersCollection.updateOne(
-          { email },
-          { $set: { fraud: true, role: 'user' } },
-          { session }
-        );
-
-        if (userResult.matchedCount === 0) {
-          throw new Error('User not found');
+        if (!["admin", "agent", "user"].includes(role)) {
+          return res.status(400).json({ error: "Invalid role" });
         }
 
-        // 2. Delete all properties by this agent
-        await agentCollection.deleteMany(
-          { agentEmail: email },
-          { session }
+        const result = await usersCollection.updateOne(
+          { email },
+          { $set: { role } }
         );
-      });
-      
-      res.send({ success: true });
-    } finally {
-      await session.endSession();
-    }
-  } catch (error) {
-    res.status(500).json({ error: error.message || 'Failed to mark as fraud' });
-  }
-});
 
-// Delete user
-app.delete('/users/:id', async (req, res) => {
-  try {
-    const id = req.params.id;
-    const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
-    
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ error: "User not found" });
+        }
 
-    res.send({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete user' });
-  }
-});
+        res.send({ success: true });
+      } catch (error) {
+        res.status(500).json({ error: "Failed to update user role" });
+      }
+    });
 
-// Delete Firebase user (this would be handled by a Firebase Cloud Function)
-// You'll need to create a separate endpoint that calls Firebase Admin SDK
-app.delete('/firebaseUser/:email', async (req, res) => {
-  try {
-    const email = req.params.email;
-    
-    // In a real implementation, you would call Firebase Admin SDK here
-    // This is just a placeholder - you'll need to implement the actual Firebase deletion
-    
-    res.send({ success: true, message: `Firebase user ${email} would be deleted in production` });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete Firebase user' });
-  }
-});
+    // Mark user as fraud
+    app.patch("/users/:email/fraud", async (req, res) => {
+      try {
+        const email = req.params.email;
 
+        // Start a transaction
+        const session = client.startSession();
+
+        try {
+          await session.withTransaction(async () => {
+            // 1. Mark user as fraud
+            const userResult = await usersCollection.updateOne(
+              { email },
+              { $set: { fraud: true, role: "user" } },
+              { session }
+            );
+
+            if (userResult.matchedCount === 0) {
+              throw new Error("User not found");
+            }
+
+            // 2. Delete all properties by this agent
+            await agentCollection.deleteMany(
+              { agentEmail: email },
+              { session }
+            );
+          });
+
+          res.send({ success: true });
+        } finally {
+          await session.endSession();
+        }
+      } catch (error) {
+        res
+          .status(500)
+          .json({ error: error.message || "Failed to mark as fraud" });
+      }
+    });
+
+    // Delete user
+    app.delete("/users/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await usersCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        res.send({ success: true });
+      } catch (error) {
+        res.status(500).json({ error: "Failed to delete user" });
+      }
+    });
+
+    // Delete Firebase user (this would be handled by a Firebase Cloud Function)
+    // You'll need to create a separate endpoint that calls Firebase Admin SDK
+    app.delete("/firebaseUser/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+
+        // In a real implementation, you would call Firebase Admin SDK here
+        // This is just a placeholder - you'll need to implement the actual Firebase deletion
+
+        res.send({
+          success: true,
+          message: `Firebase user ${email} would be deleted in production`,
+        });
+      } catch (error) {
+        res.status(500).json({ error: "Failed to delete Firebase user" });
+      }
+    });
 
     // user er My profile
     app.get("/profile", async (req, res) => {
@@ -207,62 +259,179 @@ app.delete('/firebaseUser/:email', async (req, res) => {
       }
     });
 
-    // user=========================
-
-    // wishlist er get
-    app.get("/wishlist", async (req, res) => {
-      const email = req.query.email;
-      const result = await wishListCollection
-        .find({ AgentEmail: email })
-        .toArray();
-      res.send(result);
-    });
 
 
-// make offer er id
-    // Add this route to your server code
-app.get("/wishlistProperty/:id", async (req, res) => {
+
+
+
+
+    // review post
+   // Reviews API Endpoints
+
+// Add a new review
+app.post("/reviews", async (req, res) => {
   try {
-    const id = req.params.id;
-    const property = await agentCollection.findOne({
-      _id: new ObjectId(id),
-    });
-
-    if (!property) {
-      return res.status(404).json({ error: "Property not found" });
+    const review = req.body;
+    
+    // Validate required fields
+    if (!review.propertyId || !review.comment || !review.reviewer || !review.email) {
+      return res.status(400).json({ error: "Missing required fields" });
     }
-    res.send(property);
+
+    // Add timestamp
+    review.date = new Date();
+    
+    // Insert into database
+    const result = await reviewsCollection.insertOne(review);
+    
+    res.status(201).json({
+      success: true,
+      insertedId: result.insertedId,
+      review: review
+    });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch property" });
+    console.error("Error adding review:", error);
+    res.status(500).json({ error: "Failed to add review" });
   }
 });
 
-    // In wishlist.post routes.js
-    app.post("/wishlist", async (req, res) => {
-      const wishlistItem = req.body;
+// Get reviews for a property
+app.get("/reviews", async (req, res) => {
+  try {
+    const propertyId = req.query.propertyId;
+    
+    if (!propertyId) {
+      return res.status(400).json({ error: "propertyId query parameter is required" });
+    }
+
+    const reviews = await reviewsCollection.find({ propertyId })
+      .sort({ date: -1 }) // Sort by newest first
+      .toArray();
+
+    res.status(200).json(reviews);
+  } catch (error) {
+    console.error("Error fetching reviews:", error);
+    res.status(500).json({ error: "Failed to fetch reviews" });
+  }
+});
+
+// Optional: Delete a review
+app.delete("/reviews/:id", async (req, res) => {
+  try {
+    // Verify user is admin or review owner
+    const { email } = req.query; // Assuming you pass user email for verification
+    
+    const review = await reviewsCollection.findOne({ 
+      _id: new ObjectId(req.params.id) 
+    });
+    
+    if (!review) {
+      return res.status(404).json({ error: "Review not found" });
+    }
+    
+    // Check if user is authorized (admin or review owner)
+    if (review.email !== email && !req.user.isAdmin) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+    const result = await reviewsCollection.deleteOne({ 
+      _id: new ObjectId(req.params.id) 
+    });
+  
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Review not found" });
+    }
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error deleting review:", error);
+    res.status(500).json({ error: "Failed to delete review" });
+  }
+});
+    // user=========================
+ // make offer er id
+    // Add this route to your server code
+    app.get("/wishlistProperty/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const property = await agentCollection.findOne({
+          _id: new ObjectId(id),
+        });
+
+        if (!property) {
+          return res.status(404).json({ error: "Property not found" });
+        }
+        res.send(property);
+      } catch (error) {
+        res.status(500).json({ error: "Failed to fetch property" });
+      }
+    });
+
+
+// POST: Add to Wishlist
+app.post("/wishlist", async (req, res) => {
+  const wishlistItem = req.body;
+  const result = await wishListCollection.insertOne(wishlistItem);
+  res.send(result);
+});
+
+// GET: Wishlist by user email
+app.get("/wishlist", async (req, res) => {
+  const email = req.query.email;
+  const result = await wishListCollection.find({ userEmail: email }).toArray();
+  res.send(result);
+});
+
+// DELETE: Remove wishlist item by id
+app.delete("/wishlist/:id", async (req, res) => {
+  const id = req.params.id;
+  const result = await wishListCollection.deleteOne({ _id: new ObjectId(id) });
+  res.send(result);
+});
+
+
+    // wishlist er get
+    // app.get("/wishlist", async (req, res) => {
+    //   const email = req.query.email;
+    //   const result = await wishListCollection.find({ AgentEmail: email }) .toArray();
+        
+    //    console.log(result);
+    //   res.send(result);
+    // });
+
+
+    // In wishlist.post routes.js  ............................ok
+    // app.post("/wishlist", async (req, res) => {
+    //   const wishlistItem = req.body;
 
       // check duplicate (optional)
-      const exists = await wishListCollection.findOne({
-        userEmail: wishlistItem.userEmail,
-        propertyId: wishlistItem.propertyId,
-      });
+    //   const exists = await wishListCollection.findOne({
+    //     userEmail: wishlistItem.userEmail,
+    //     propertyId: wishlistItem.propertyId,
+    //   });
 
-      if (exists) {
-        return res.status(400).send({ message: "Already in wishlist" });
-      }
+    //   if (exists) {
+    //     return res.status(400).send({ message: "Already in wishlist" });
+    //   }
 
-      const result = await wishListCollection.insertOne(wishlistItem);
-      res.send(result);
-    });
+    //   const result = await wishListCollection.insertOne(wishlistItem);
+    //   res.send(result);
+    // });
 
     // wishlist delete
-    app.delete("/wishlistDelete/:id", async (req, res) => {
-      const id = req.params.id;
-      const result = await wishListCollection.deleteOne({
-        _id: new ObjectId(id),
-      });
-      res.send(result);
-    });
+    // app.delete("/wishlistDelete/:id", async (req, res) => {
+    //   const id = req.params.id;
+    //   const result = await wishListCollection.deleteOne({
+    //     _id: new ObjectId(id),
+    //   });
+    //   res.send(result);
+    // });
+
+
+
+
+
+
+
+
 
     //  register kora gular api
     app.post("/users", async (req, res) => {
@@ -275,9 +444,6 @@ app.get("/wishlistProperty/:id", async (req, res) => {
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
-
-
-
 
     // agents site ===================
 
@@ -339,7 +505,6 @@ app.get("/wishlistProperty/:id", async (req, res) => {
       const result = await agentCollection.updateOne({ _id: id }, updateDoc);
       res.send(result);
     });
-
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
