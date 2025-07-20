@@ -33,6 +33,7 @@ async function run() {
     const reviewsCollection = db.collection("reviews");
     const offerCollection = db.collection('offers')
 
+
     // get user role
     app.get("/users/:email/role", async (req, res) => {
       const email = req.params.email;
@@ -45,6 +46,76 @@ async function run() {
       }
       res.send({ role: user.role || "user" });
     });
+
+
+    // user er My profile
+    app.get("/profile", async (req, res) => {
+      const email = req.query.email;
+      if (!email) return res.status(400).json({ error: "Email required" });
+
+      try {
+        const user = await usersCollection.findOne({ email });
+        if (!user) return res.status(404).json({ error: "User not found" });
+
+        res.json({
+          name: user.name,
+          image: user.image,
+          role: user.role,
+          email: user.email,
+          phone: user.phone || "",
+        });
+      } catch (err) {
+        res.status(500).json({ error: "Internal server error" });
+      }
+    });
+
+    // All properties
+    app.get("/allProperties", async (req, res) => {
+      const { location, sort } = req.query;
+      const query = location
+        ? { location: { $regex: location, $options: "i" } }
+        : {};
+      const sortOption =
+        sort === "asc" ? { price: 1 } : sort === "desc" ? { price: -1 } : {};
+
+      const result = await agentCollection
+        .find(query)
+        .sort(sortOption)
+        .toArray();
+      res.send(result);
+    });
+
+    // property Details
+    app.get("/properties/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const property = await agentCollection.findOne({
+          _id: new ObjectId(id),
+        });
+
+        if (!property) {
+          return res.status(404).json({ error: "Property not found" });
+        }
+        console.log(property);
+
+        res.send(property);
+      } catch (error) {
+        res.status(500).json({ error: "Failed to fetch property" });
+      }
+    });
+
+    //  register kora gular api
+    app.post("/users", async (req, res) => {
+      const email = req.body.email;
+      const existingUser = await usersCollection.findOne({ email });
+      if (existingUser) {
+        return res.status(200).send({ message: "user already exists" });
+      }
+      const user = req.body;
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    });
+
 
 // Get latest reviews
 app.get("/reviews/latest", async (req, res) => {
@@ -169,6 +240,33 @@ app.delete("/reviews/:id", async (req, res) => {
   }
 });
 
+// Offer route
+app.post('/offers', async (req, res) => {
+  try {
+    const offer = req.body;
+
+    // Validation: Only users can submit offers
+    const buyerRole = offer.buyerRole;
+    if (buyerRole !== 'user') {
+      return res.status(403).send({ message: "Only users can make offers." });
+    }
+
+    // Validation: Check if offerAmount is within price range
+    const { offerAmount, minPrice, maxPrice } = offer;
+    if (offerAmount < minPrice || offerAmount > maxPrice) {
+      return res.status(400).send({ message: "Offer must be within the price range." });
+    }
+
+    // Add default status
+    offer.status = "pending";
+
+    const result = await offerCollection.insertOne(offer);
+    res.send(result);
+  } catch (error) {
+    console.error("Error submitting offer:", error);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
 
 
 
@@ -285,62 +383,10 @@ app.delete("/reviews/:id", async (req, res) => {
       }
     });
 
-    // user er My profile
-    app.get("/profile", async (req, res) => {
-      const email = req.query.email;
-      if (!email) return res.status(400).json({ error: "Email required" });
 
-      try {
-        const user = await usersCollection.findOne({ email });
-        if (!user) return res.status(404).json({ error: "User not found" });
 
-        res.json({
-          name: user.name,
-          image: user.image,
-          role: user.role,
-          email: user.email,
-          phone: user.phone || "",
-        });
-      } catch (err) {
-        res.status(500).json({ error: "Internal server error" });
-      }
-    });
 
-    // All properties
-    app.get("/allProperties", async (req, res) => {
-      const { location, sort } = req.query;
-      const query = location
-        ? { location: { $regex: location, $options: "i" } }
-        : {};
-      const sortOption =
-        sort === "asc" ? { price: 1 } : sort === "desc" ? { price: -1 } : {};
-
-      const result = await agentCollection
-        .find(query)
-        .sort(sortOption)
-        .toArray();
-      res.send(result);
-    });
-
-    // property Details
-    app.get("/properties/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        const property = await agentCollection.findOne({
-          _id: new ObjectId(id),
-        });
-
-        if (!property) {
-          return res.status(404).json({ error: "Property not found" });
-        }
-        console.log(property);
-
-        res.send(property);
-      } catch (error) {
-        res.status(500).json({ error: "Failed to fetch property" });
-      }
-    });
-
+    
 
 
 
@@ -355,7 +401,8 @@ app.delete("/reviews/:id", async (req, res) => {
         const property = await agentCollection.findOne({
           _id: new ObjectId(id),
         });
-
+         
+        console.log(property);
         if (!property) {
           return res.status(404).json({ error: "Property not found" });
         }
@@ -388,17 +435,7 @@ app.delete("/wishlist/:id", async (req, res) => {
 
 
 
-    //  register kora gular api
-    app.post("/users", async (req, res) => {
-      const email = req.body.email;
-      const existingUser = await usersCollection.findOne({ email });
-      if (existingUser) {
-        return res.status(200).send({ message: "user already exists" });
-      }
-      const user = req.body;
-      const result = await usersCollection.insertOne(user);
-      res.send(result);
-    });
+    
 
     // agents site ===================
 
