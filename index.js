@@ -31,6 +31,7 @@ async function run() {
     const agentCollection = db.collection("agents");
     const wishListCollection = db.collection("wishList");
     const reviewsCollection = db.collection("reviews");
+    const offerCollection = db.collection('offers')
 
     // get user role
     app.get("/users/:email/role", async (req, res) => {
@@ -86,6 +87,87 @@ app.get("/reviews/latest", async (req, res) => {
   }
 });
 
+// review post
+   // Reviews API Endpoints
+
+// Add a new review
+app.post("/reviews", async (req, res) => {
+  try {
+    const review = req.body;
+    
+    // Validate required fields
+    if (!review.propertyId || !review.comment || !review.reviewer || !review.email) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Add timestamp
+    review.date = new Date();
+    
+    // Insert into database
+    const result = await reviewsCollection.insertOne(review);
+    
+    res.status(201).json({
+      success: true,
+      insertedId: result.insertedId,
+      review: review
+    });
+  } catch (error) {
+    console.error("Error adding review:", error);
+    res.status(500).json({ error: "Failed to add review" });
+  }
+});
+
+// Get reviews for a property
+app.get("/reviews", async (req, res) => {
+  try {
+    const propertyId = req.query.propertyId;
+    
+    if (!propertyId) {
+      return res.status(400).json({ error: "propertyId query parameter is required" });
+    }
+
+    const reviews = await reviewsCollection.find({ propertyId })
+      .sort({ date: -1 }) // Sort by newest first
+      .toArray();
+
+    res.status(200).json(reviews);
+  } catch (error) {
+    console.error("Error fetching reviews:", error);
+    res.status(500).json({ error: "Failed to fetch reviews" });
+  }
+});
+
+// Optional: Delete a review
+app.delete("/reviews/:id", async (req, res) => {
+  try {
+    // Verify user is admin or review owner
+    const { email } = req.query; // Assuming you pass user email for verification
+    
+    const review = await reviewsCollection.findOne({ 
+      _id: new ObjectId(req.params.id) 
+    });
+    
+    if (!review) {
+      return res.status(404).json({ error: "Review not found" });
+    }
+    
+    // Check if user is authorized (admin or review owner)
+    if (review.email !== email && !req.user.isAdmin) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+    const result = await reviewsCollection.deleteOne({ 
+      _id: new ObjectId(req.params.id) 
+    });
+  
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Review not found" });
+    }
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error deleting review:", error);
+    res.status(500).json({ error: "Failed to delete review" });
+  }
+});
 
 
 
@@ -264,88 +346,6 @@ app.get("/reviews/latest", async (req, res) => {
 
 
 
-
-    // review post
-   // Reviews API Endpoints
-
-// Add a new review
-app.post("/reviews", async (req, res) => {
-  try {
-    const review = req.body;
-    
-    // Validate required fields
-    if (!review.propertyId || !review.comment || !review.reviewer || !review.email) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    // Add timestamp
-    review.date = new Date();
-    
-    // Insert into database
-    const result = await reviewsCollection.insertOne(review);
-    
-    res.status(201).json({
-      success: true,
-      insertedId: result.insertedId,
-      review: review
-    });
-  } catch (error) {
-    console.error("Error adding review:", error);
-    res.status(500).json({ error: "Failed to add review" });
-  }
-});
-
-// Get reviews for a property
-app.get("/reviews", async (req, res) => {
-  try {
-    const propertyId = req.query.propertyId;
-    
-    if (!propertyId) {
-      return res.status(400).json({ error: "propertyId query parameter is required" });
-    }
-
-    const reviews = await reviewsCollection.find({ propertyId })
-      .sort({ date: -1 }) // Sort by newest first
-      .toArray();
-
-    res.status(200).json(reviews);
-  } catch (error) {
-    console.error("Error fetching reviews:", error);
-    res.status(500).json({ error: "Failed to fetch reviews" });
-  }
-});
-
-// Optional: Delete a review
-app.delete("/reviews/:id", async (req, res) => {
-  try {
-    // Verify user is admin or review owner
-    const { email } = req.query; // Assuming you pass user email for verification
-    
-    const review = await reviewsCollection.findOne({ 
-      _id: new ObjectId(req.params.id) 
-    });
-    
-    if (!review) {
-      return res.status(404).json({ error: "Review not found" });
-    }
-    
-    // Check if user is authorized (admin or review owner)
-    if (review.email !== email && !req.user.isAdmin) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-    const result = await reviewsCollection.deleteOne({ 
-      _id: new ObjectId(req.params.id) 
-    });
-  
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ error: "Review not found" });
-    }
-    res.status(200).json({ success: true });
-  } catch (error) {
-    console.error("Error deleting review:", error);
-    res.status(500).json({ error: "Failed to delete review" });
-  }
-});
     // user=========================
  // make offer er id
     // Add this route to your server code
@@ -364,7 +364,6 @@ app.delete("/reviews/:id", async (req, res) => {
         res.status(500).json({ error: "Failed to fetch property" });
       }
     });
-
 
 // POST: Add to Wishlist
 app.post("/wishlist", async (req, res) => {
@@ -386,50 +385,6 @@ app.delete("/wishlist/:id", async (req, res) => {
   const result = await wishListCollection.deleteOne({ _id: new ObjectId(id) });
   res.send(result);
 });
-
-
-    // wishlist er get
-    // app.get("/wishlist", async (req, res) => {
-    //   const email = req.query.email;
-    //   const result = await wishListCollection.find({ AgentEmail: email }) .toArray();
-        
-    //    console.log(result);
-    //   res.send(result);
-    // });
-
-
-    // In wishlist.post routes.js  ............................ok
-    // app.post("/wishlist", async (req, res) => {
-    //   const wishlistItem = req.body;
-
-      // check duplicate (optional)
-    //   const exists = await wishListCollection.findOne({
-    //     userEmail: wishlistItem.userEmail,
-    //     propertyId: wishlistItem.propertyId,
-    //   });
-
-    //   if (exists) {
-    //     return res.status(400).send({ message: "Already in wishlist" });
-    //   }
-
-    //   const result = await wishListCollection.insertOne(wishlistItem);
-    //   res.send(result);
-    // });
-
-    // wishlist delete
-    // app.delete("/wishlistDelete/:id", async (req, res) => {
-    //   const id = req.params.id;
-    //   const result = await wishListCollection.deleteOne({
-    //     _id: new ObjectId(id),
-    //   });
-    //   res.send(result);
-    // });
-
-
-
-
-
-
 
 
 
@@ -505,6 +460,7 @@ app.delete("/wishlist/:id", async (req, res) => {
       const result = await agentCollection.updateOne({ _id: id }, updateDoc);
       res.send(result);
     });
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
