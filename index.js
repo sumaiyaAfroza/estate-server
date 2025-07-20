@@ -120,43 +120,18 @@ async function run() {
 // Get latest reviews
 app.get("/reviews/latest", async (req, res) => {
   try {
-    const reviews = await reviewsCollection.aggregate([
-      {
-        $sort: { date: -1 } // Sort by newest first
-      },
-      {
-        $limit: 5 // Get 5 most recent reviews
-      },
-      {
-        $lookup: {
-          from: "properties", // Collection name for properties
-          localField: "propertyId",
-          foreignField: "_id",
-          as: "property"
-        }
-      },
-      {
-        $unwind: "$property" // Convert array to object
-      },
-      {
-        $project: {
-          _id: 1,
-          reviewer: 1,
-          reviewerImage: 1,
-          comment: 1,
-          date: 1,
-          propertyTitle: "$property.title",
-          propertyId: 1
-        }
-      }
-    ]).toArray();
+    const latestReviews = await reviewsCollection
+      .find()
+      .sort({ date: -1 })     // Sort by latest first
+      .limit(3)               // Only return top 3
+      .toArray();
 
-    res.status(200).json(reviews);
+    res.send(latestReviews);
   } catch (error) {
-    console.error("Error fetching latest reviews:", error);
-    res.status(500).json({ error: "Failed to fetch latest reviews" });
+    res.status(500).send({ message: "Failed to fetch latest reviews", error });
   }
 });
+
 
 // review post
    // Reviews API Endpoints
@@ -208,37 +183,47 @@ app.get("/reviews", async (req, res) => {
   }
 });
 
+// my reviews er get email soho
+app.get("/myReviews", async (req, res) => {
+  try {
+    const email = req.query.email;
+
+    if (!email) {
+      return res.status(400).send({ message: "Email is required" });
+    }
+
+    const userReviews = await reviewsCollection
+      .find({ email: email })
+      .sort({ date: -1 }) // Show latest reviews first
+      .toArray();
+
+    res.send(userReviews);
+  } catch (error) {
+    res.status(500).send({ message: "Something went wrong", error });
+  }
+});
+
 // Optional: Delete a review
 app.delete("/reviews/:id", async (req, res) => {
   try {
-    // Verify user is admin or review owner
-    const { email } = req.query; // Assuming you pass user email for verification
-    
-    const review = await reviewsCollection.findOne({ 
-      _id: new ObjectId(req.params.id) 
-    });
-    
-    if (!review) {
-      return res.status(404).json({ error: "Review not found" });
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+
+    const result = await reviewsCollection.deleteOne(query);
+
+    if (result.deletedCount === 1) {
+      res.send({ message: "Review deleted successfully" });
+    } else {
+      res.status(404).send({ message: "Review not found" });
     }
-    
-    // Check if user is authorized (admin or review owner)
-    if (review.email !== email && !req.user.isAdmin) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-    const result = await reviewsCollection.deleteOne({ 
-      _id: new ObjectId(req.params.id) 
-    });
-  
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ error: "Review not found" });
-    }
-    res.status(200).json({ success: true });
   } catch (error) {
-    console.error("Error deleting review:", error);
-    res.status(500).json({ error: "Failed to delete review" });
+    res.status(500).send({ message: "Failed to delete review", error });
   }
 });
+
+
+
+
 
 // Offer route
 app.post('/offers', async (req, res) => {
@@ -267,6 +252,25 @@ app.post('/offers', async (req, res) => {
     res.status(500).send({ message: "Internal Server Error" });
   }
 });
+
+app.get("/offers", async (req, res) => {
+  try {
+    const { email, role } = req.query;
+
+    if (!email || !role) {
+      return res.status(400).json({ message: "Email and role are required" });
+    }
+
+    const query = { buyerEmail: email, buyerRole: role };
+    const offers = await offerCollection.find(query).toArray();
+
+    res.send(offers);
+  } catch (error) {
+    console.error("Error fetching offers:", error);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
+
 
 
 
