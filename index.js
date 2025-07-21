@@ -280,6 +280,11 @@ async function run() {
       }
     });
 
+
+
+
+
+
     // admin==============
 
     // Get all users
@@ -392,31 +397,81 @@ async function run() {
       }
     });
 
+
+
     // manage properties
-    app.get("/properties/manage", async (req, res) => {
-      try {
-        const result = await agentCollection
-          .find({})
-          .project({
-            title: 1,
-            location: 1,
-            agentName: 1,
-            agentEmail: 1,
-            price: 1,
-            status: 1,
-          }) // return only necessary fields
-          .toArray();
-        res.send(result);
-      } catch (error) {
-        console.error("Error fetching properties:", error);
-        res.status(500).send({ message: "Failed to fetch properties" });
-      }
+    // Get all properties for admin management   
+app.get('/properties',async(req,res)=>{
+  const result = await agentCollection.find().toArray()
+  res.send(result)
+})
+
+
+app.patch("/properties/verify/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    
+    // Update in propertyCollection
+    const result = await agentCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status: "verified", verified: true } }
+    );
+
+    // console.log(result);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({ message: "Property not found" });
+    }
+
+    // Also update in agentCollection
+    await agentCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status: "verified", verified: true } }
+    );
+
+    res.send({ 
+      success: true,
+      message: "Property verified successfully"
     });
+  } catch (error) {
+    console.error("Error verifying property:", error);
+    res.status(500).send({ message: "Failed to verify property" });
+  }
+});
 
-    // vefiry id
+// Reject a property
+app.patch("/properties/reject/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    
+    const result = await agentCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status: "rejected", verified: false } }
+    );
 
-    //  reject
+    console.log(result);
 
+    if (result.matchedCount === 0) {
+      return res.status(404).send({ message: "Property not found" });
+    }
+
+    // Also update in agentCollection
+    await agentCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status: "rejected", verified: false } }
+    );
+
+    res.send({ 
+      success: true,
+      message: "Property rejected successfully"
+    });
+  } catch (error) {
+    console.error("Error rejecting property:", error);
+    res.status(500).send({ message: "Failed to reject property" });
+  }
+});
+
+    
     // user=========================
     // make offer er id
     // Add this route to your server code
@@ -462,6 +517,9 @@ async function run() {
       res.send(result);
     });
 
+
+
+
     // agents site ===================
 
     // ✅ Get properties by agent email (My Added Properties)
@@ -482,17 +540,59 @@ async function run() {
       }
     });
 
+
+
     // add property er form post
-    app.post("/addProperty", async (req, res) => {
-      try {
-        const add = req.body;
-        const result = await agentCollection.insertOne(add);
-        res.send(result);
-        // res.status(201).json({_id: result.insertedId})
-      } catch (error) {
-        res.status(500).json({ error: error.message });
-      }
+    // Update the add property endpoint
+app.post("/addProperty", async (req, res) => {
+    const propertyData = req.body;
+    console.log(propertyData);
+
+    // Validate required fields
+    if (!propertyData.title || !propertyData.location || !propertyData.imageUrl || 
+        !propertyData.agentEmail || !propertyData.price) {
+      return res.status(400).json({ 
+        success: false,
+        error: "Missing required fields" 
+      });
+    }
+
+  //   // Ensure price is properly formatted
+    if (typeof propertyData.price !== 'object' || 
+        !propertyData.price.min || !propertyData.price.max) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid price format"
+      });
+    }
+
+  //   // Set default values
+    propertyData.status = "pending";
+    propertyData.verified = false;
+    propertyData.createdAt = new Date();
+
+  //   // Insert into both collections
+    const [agentResult, propertyResult] = await Promise.all([
+      agentCollection.insertOne(propertyData),
+      propertyCollection.insertOne(propertyData)
+    ]);
+
+    res.status(201).json({
+      success: true,
+      agentInsertedId: agentResult.insertedId,
+      propertyInsertedId: propertyResult.insertedId
     });
+  // } catch (error) {
+  //   console.error("Error adding property:", error);
+  //   res.status(500).json({ 
+  //     success: false,
+  //     error: error.message 
+  //   });
+  // }
+});
+
+
+
 
     // agent property delete
     app.delete("/property/:id", async (req, res) => {
