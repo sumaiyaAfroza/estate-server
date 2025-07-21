@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
@@ -397,6 +398,20 @@ async function run() {
       }
     });
 
+    // admin er manage review
+    app.get("/allReviews", async (req, res) => {
+  try {
+    const reviews = await reviewsCollection.find().toArray();
+    console.log(reviews);
+
+    res.send(reviews);
+  } catch (error) {
+    console.error("Error fetching reviews:", error);
+    res.status(400).json({ error: "Failed to fetch reviews" });
+  }
+});
+
+
 
 
     // manage properties
@@ -405,7 +420,6 @@ app.get('/properties',async(req,res)=>{
   const result = await agentCollection.find().toArray()
   res.send(result)
 })
-
 
 app.patch("/properties/verify/:id", async (req, res) => {
   try {
@@ -720,6 +734,76 @@ app.post("/addProperty", async (req, res) => {
         });
       }
     });
+
+
+// stripe
+// Create payment intent
+app.post('/create-payment-intent', async (req, res) => {
+  try {
+    const { amountInCents, propertyId } = req.body;
+    
+    if (!amountInCents || !propertyId) {
+      return res.status(400).json({ error: 'Amount and propertyId required' });
+    }
+
+    const property = await agentCollection.findOne({ 
+      _id: new ObjectId(propertyId) 
+    });
+
+    if (!property) {
+      return res.status(404).json({ error: 'Property not found' });
+    }
+
+    if (property.status === 'sold') {
+      return res.status(400).json({ error: 'Property already sold' });
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amountInCents,
+      currency: 'usd',
+      payment_method_types: ['card'],
+      metadata: { propertyId },
+    });
+
+    res.json({ clientSecret: paymentIntent.client_secret });
+  } catch (error) {
+    console.error('Error creating payment intent:', error);
+    res.status(500).json({ error: 'Failed to create payment intent' });
+  }
+});
+
+// Update property payment status
+app.put('/property/:id/pay', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { transactionId } = req.body;
+
+    const result = await Promise.all([
+      agentCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: 'sold', transactionId, soldAt: new Date() } }
+      ),
+      propertyCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: 'sold', transactionId, soldAt: new Date() } }
+      )
+    ]);
+
+    if (result[0].matchedCount === 0) {
+      return res.status(404).json({ error: 'Property not found' });
+    }
+
+    res.json({ success: true, message: 'Payment recorded successfully' });
+  } catch (error) {
+    console.error('Error recording payment:', error);
+    res.status(500).json({ error: 'Failed to record payment' });
+  }
+});
+
+
+
+
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
