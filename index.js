@@ -463,7 +463,7 @@ app.patch("/properties/reject/:id", async (req, res) => {
       { $set: { status: "rejected", verified: false } }
     );
 
-    console.log(result);
+    // console.log(result);
 
     if (result.matchedCount === 0) {
       return res.status(404).send({ message: "Property not found" });
@@ -496,7 +496,8 @@ app.patch("/properties/reject/:id", async (req, res) => {
           _id: new ObjectId(id),
         });
 
-        console.log(property);
+        // console.log(property);
+
         if (!property) {
           return res.status(404).json({ error: "Property not found" });
         }
@@ -509,6 +510,9 @@ app.patch("/properties/reject/:id", async (req, res) => {
     // POST: Add to Wishlist
     app.post("/wishlist", async (req, res) => {
       const wishlistItem = req.body;
+
+      // console.log(wishlistItem);
+
       const result = await wishListCollection.insertOne(wishlistItem);
       res.send(result);
     });
@@ -553,8 +557,6 @@ app.patch("/properties/reject/:id", async (req, res) => {
         res.status(500).send({ error: "Internal server error" });
       }
     });
-
-
 
     // add property er form post
     // Update the add property endpoint
@@ -605,9 +607,6 @@ app.post("/addProperty", async (req, res) => {
   // }
 });
 
-
-
-
     // agent property delete
     app.delete("/property/:id", async (req, res) => {
       const id = new ObjectId(req.params.id);
@@ -652,7 +651,7 @@ app.post("/addProperty", async (req, res) => {
       }
     });
 
-    // PATCH: Accept an offer
+    // PATCH: Accept an offer===============================================================================================
     app.patch("/offers/accept/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -698,6 +697,79 @@ app.post("/addProperty", async (req, res) => {
       }
     });
 
+    // Add this new route to your server code after the existing payment routes
+
+// Update offer status to bought after payment
+app.put('/offer/:id/buy', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { transactionId } = req.body;
+
+    const result = await offerCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { 
+        $set: { 
+          status: 'bought', 
+          transactionId, 
+          paidAt: new Date() 
+        } 
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Offer not found' });
+    }
+
+    res.json({ success: true, message: 'Offer status updated successfully' });
+  } catch (error) {
+    console.error('Error updating offer:', error);
+    res.status(500).json({ error: 'Failed to update offer status' });
+  }
+});
+
+// Update the existing property payment route to also update offer
+app.put('/property/:id/pay', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { transactionId, offerId } = req.body;
+
+    // Update property status
+    const propertyResult = await Promise.all([
+      agentCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: 'sold', transactionId, soldAt: new Date() } }
+      ),
+      propertyCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: 'sold', transactionId, soldAt: new Date() } }
+      )
+    ]);
+
+    // Update offer status to bought if offerId provided
+    if (offerId) {
+      await offerCollection.updateOne(
+        { _id: new ObjectId(offerId) },
+        { 
+          $set: { 
+            status: 'bought', 
+            transactionId, 
+            paidAt: new Date() 
+          } 
+        }
+      );
+    }
+
+    if (propertyResult[0].matchedCount === 0) {
+      return res.status(404).json({ error: 'Property not found' });
+    }
+
+    res.json({ success: true, message: 'Payment recorded successfully' });
+  } catch (error) {
+    console.error('Error recording payment:', error);
+    res.status(500).json({ error: 'Failed to record payment' });
+  }
+});
+
     // PATCH: Reject an offer
     app.patch("/offers/reject/:id", async (req, res) => {
       try {
@@ -734,6 +806,20 @@ app.post("/addProperty", async (req, res) => {
         });
       }
     });
+    // --------
+    // GET /sold-properties?agentEmail=agent@example.com
+app.get("/sold-properties", async (req, res) => {
+  const agentEmail = req.query.agentEmail;
+  const sold = await agentCollection.find({
+    agentEmail,
+    status: "sold", // Only paid offers
+  }).toArray();
+
+  res.send(sold);
+});
+
+
+
 
 
 // stripe
@@ -741,6 +827,8 @@ app.post("/addProperty", async (req, res) => {
 app.post('/create-payment-intent', async (req, res) => {
   try {
     const { amountInCents, propertyId } = req.body;
+    console.log(amountInCents, propertyId);
+
     
     if (!amountInCents || !propertyId) {
       return res.status(400).json({ error: 'Amount and propertyId required' });
@@ -750,13 +838,17 @@ app.post('/create-payment-intent', async (req, res) => {
       _id: new ObjectId(propertyId) 
     });
 
+    console.log(property);
+
     if (!property) {
       return res.status(404).json({ error: 'Property not found' });
     }
 
-    if (property.status === 'sold') {
-      return res.status(400).json({ error: 'Property already sold' });
-    }
+    // if (property.status === 'sold') {
+    //   console.log(property.status);
+      
+    //   return res.status(400).json({ error: 'Property already sold' });
+    // }
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInCents,
