@@ -1,15 +1,21 @@
 require("dotenv").config();
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
 const cors = require("cors");
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const admin = require("firebase-admin");
+const serviceAccount = require("./firebase-admin-key.json");
 
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 3000;
 
 // MIddle ware
 app.use(cors());
 app.use(express.json());
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nkqgssx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -35,58 +41,57 @@ async function run() {
     const offerCollection = db.collection("offers");
     const propertyCollection = db.collection("property");
 
-     // jwt token
-    const verifyFireBaseToken = async(req,res,next)=>{
-      const authHeader = req.headers.authorization 
-          // console.log(authHeader)
-      if(!authHeader){
-        return res.status(401).send({message: "unauthorized access"})
+    // jwt token
+    const verifyFireBaseToken = async (req, res, next) => {
+      const authHeader = req.headers.authorization;
+      // console.log(authHeader)
+      if (!authHeader) {
+        return res.status(401).send({ message: "unauthorized access" });
       }
-      const token = authHeader.split(' ')[1]
-      if(!token){
-        return res.status(401).send({message: "unauthorized access"})
+      const token = authHeader.split(" ")[1];
+      if (!token) {
+        return res.status(401).send({ message: "unauthorized access" });
       }
       try {
-        const decoded = await admin.auth().verifyIdToken(token)
-        req.decoded = decoded 
-        next()
-      } 
-      catch (error) {
-        console.log(error)
+        const decoded = await admin.auth().verifyIdToken(token);
+        req.decoded = decoded;
+        next();
+      } catch (error) {
+        console.log(error);
       }
-    }
-
-
+    };
     // verifyAdmin
-     const verifyAdmin = async (req, res, next) => {
-            const email = req.decoded.email;
-            const query = { email }
-            const user = await usersCollection.findOne(query);
-            if (!user || user.role !== 'admin') {
-                return res.status(403).send({ message: 'forbidden access' })
-            }
-            next();
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email };
+      const user = await usersCollection.findOne(query);
+      if (!user || user.role !== "admin") {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      next();
+    };
+
+    // admin role set korar jonno                       
+    app.patch("/users/:id/role", verifyFireBaseToken,async (req, res) => {
+        const { id } = req.params;
+        const { role } = req.body;
+
+        if (!["admin", "user"].includes(role)) {
+          return res.status(400).send({ message: "Invalid role" });
         }
-// admin role set korar jonno
-         app.patch("/users/:id/role",verifyFireBaseToken,verifyAdmin, async (req, res) => {
-            const { id } = req.params;
-            const { role } = req.body; 
 
-            if (!["admin", "user"].includes(role)) {
-                return res.status(400).send({ message: "Invalid role" });
-            }
-
-            try {
-                const result = await usersCollection.updateOne(
-                    { _id: new ObjectId(id) },
-                    { $set: { role } }
-                );
-                res.send({ message: `User role updated to ${role}`, result });
-            } catch (error) {
-                console.error("Error updating user role", error);
-                res.status(500).send({ message: "Failed to update user role" });
-            }
-        });
+        try {
+          const result = await usersCollection.updateOne(
+            { _id: new ObjectId(id) },
+            { $set: { role } }
+          );
+          res.send({ message: `User role updated to ${role}`, result });
+        } catch (error) {
+          console.error("Error updating user role", error);
+          res.status(500).send({ message: "Failed to update user role" });
+        }
+      }
+    );
     // get user role by email
     app.get("/users/:email/role", async (req, res) => {
       const email = req.params.email;
@@ -100,9 +105,6 @@ async function run() {
       res.send({ role: user.role || "user" });
     });
 
-    
-
-
     //  register kora gular api
     app.post("/users", async (req, res) => {
       const email = req.body.email;
@@ -110,7 +112,7 @@ async function run() {
       if (existingUser) {
         return res.status(200).send({ message: "user already exists" });
       }
-      const user = req.body; 
+      const user = req.body;
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
@@ -173,68 +175,67 @@ async function run() {
 
     // home er advertise
     // Get verified properties
-app.get("/properties/verified", async (req, res) => {
-  try {
-    const verified = await agentCollection
-      .find({ verified: true })
-      .toArray();
-    res.send(verified);
-  } catch (error) {
-    console.error("Error fetching verified properties:", error);
-    res.status(500).send({ message: "Failed to fetch verified properties" });
-  }
-});
-
-// Patch advertise status
-app.patch("/properties/advertise/:id", async (req, res) => {
-  try {
-    const result = await agentCollection.updateOne(
-      { _id: new ObjectId(req.params.id) },
-      { $set: { isAdvertised: true } }
-    );
-    res.send(result);
-  } catch (error) {
-    console.error("Advertise error:", error);
-    res.status(500).send({ message: "Failed to advertise property" });
-  }
-});
-// Replace the existing /properties/advertised endpoint with this:
-app.get("/propertiess/advertised", async (req, res) => {
-  try {
-    // Get advertised properties from agentCollection (where properties are actually stored)===============
-    const advertised = await agentCollection
-      .find({ 
-        isAdvertised: true,
-        verified: true,
-        status: "verified" // or "approved" depending on your schema
-      })
-      .sort({ date: -1 }) // Sort by latest first
-         .limit(4) // Only return top 3
-      .toArray();
-    
-    // Transform data to match frontend expectations
-    const transformed = advertised.map(property => ({
-      _id: property._id,
-      title: property.title,
-      location: property.location,
-      price: `${property.price.min} - ${property.price.max}`,
-      image: property.imageUrl, // Frontend expects 'image' but we have 'imageUrl'
-      verified: property.verified,
-      agentName: property.agentName
-    }));
-
-    res.send(transformed);
-  } catch (error) {
-    console.error("Advertised properties error:", error);
-    res.status(500).send({ 
-      message: "Failed to fetch advertised properties",
-      error: error.message
+    app.get("/properties/verified", async (req, res) => {
+      try {
+        const verified = await agentCollection
+          .find({ verified: true })
+          .toArray();
+        res.send(verified);
+      } catch (error) {
+        console.error("Error fetching verified properties:", error);
+        res
+          .status(500)
+          .send({ message: "Failed to fetch verified properties" });
+      }
     });
-  }
-});
 
+    // Patch advertise status
+    app.patch("/properties/advertise/:id", async (req, res) => {
+      try {
+        const result = await agentCollection.updateOne(
+          { _id: new ObjectId(req.params.id) },
+          { $set: { isAdvertised: true } }
+        );
+        res.send(result);
+      } catch (error) {
+        console.error("Advertise error:", error);
+        res.status(500).send({ message: "Failed to advertise property" });
+      }
+    });
+    // Replace the existing /properties/advertised endpoint with this:
+    app.get("/propertiess/advertised", async (req, res) => {
+      try {
+        // Get advertised properties from agentCollection (where properties are actually stored)===============
+        const advertised = await agentCollection
+          .find({
+            isAdvertised: true,
+            verified: true,
+            status: "verified", // or "approved" depending on your schema
+          })
+          .sort({ createdAt: -1 }) // Sort by latest first
+          .limit(4) // Only return top 3
+          .toArray();
 
-    
+        // Transform data to match frontend expectations
+        const transformed = advertised.map((property) => ({
+          _id: property._id,
+          title: property.title,
+          location: property.location,
+          price: `${property.price.min} - ${property.price.max}`,
+          image: property.imageUrl, // Frontend expects 'image' but we have 'imageUrl'
+          verified: property.verified,
+          agentName: property.agentName,
+        }));
+
+        res.send(transformed);
+      } catch (error) {
+        console.error("Advertised properties error:", error);
+        res.status(500).send({
+          message: "Failed to fetch advertised properties",
+          error: error.message,
+        });
+      }
+    });
 
     // Get latest reviews
     app.get("/reviews/latest", async (req, res) => {
@@ -311,13 +312,13 @@ app.get("/propertiess/advertised", async (req, res) => {
       }
     });
 
-    // my reviews er get email soho
-    app.get("/myReviews", async (req, res) => {
+    // my reviews er get email soho                     ============================verifyFBToken
+    app.get("/myReviews", verifyFireBaseToken, async (req, res) => {
       try {
         const email = req.query.email;
 
-        if (!email) {
-          return res.status(400).send({ message: "Email is required" });
+        if (req.decoded.email !== email) {
+          return res.status(403).send({ message: "forbidden access" });
         }
 
         const userReviews = await reviewsCollection
@@ -380,10 +381,14 @@ app.get("/propertiess/advertised", async (req, res) => {
         res.status(500).send({ message: "Internal Server Error" });
       }
     });
-    // offer
-    app.get("/offers", async (req, res) => {
+    // offer                                                   ======================verify
+    app.get("/offers", verifyFireBaseToken, async (req, res) => {
       try {
         const { email, role } = req.query;
+
+        if (req.decoded.email !== email) {
+          return res.status(403).send({ message: "forbidden access" });
+        }
 
         if (!email || !role) {
           return res
@@ -405,9 +410,8 @@ app.get("/propertiess/advertised", async (req, res) => {
 
 
 
-
     // Get all users
-    app.get("/users", async (req, res) => {
+    app.get("/users",verifyFireBaseToken,verifyAdmin, async (req, res) => {
       try {
         const users = await usersCollection.find().toArray();
         res.send(users);
@@ -518,92 +522,88 @@ app.get("/propertiess/advertised", async (req, res) => {
 
     // admin er manage review
     app.get("/allReviews", async (req, res) => {
-  try {
-    const reviews = await reviewsCollection.find().toArray();
-    // console.log(reviews);
+      try {
+        const reviews = await reviewsCollection.find().toArray();
+        // console.log(reviews);
 
-    res.send(reviews);
-  } catch (error) {
-    console.error("Error fetching reviews:", error);
-    res.status(400).json({ error: "Failed to fetch reviews" });
-  }
-});
-
-
-
+        res.send(reviews);
+      } catch (error) {
+        console.error("Error fetching reviews:", error);
+        res.status(400).json({ error: "Failed to fetch reviews" });
+      }
+    });
 
     // manage properties
-    // Get all properties for admin management   
-app.get('/properties',async(req,res)=>{
-  const result = await agentCollection.find().toArray()
-  res.send(result)
-})
-
-app.patch("/properties/verify/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-    
-    // Update in propertyCollection
-    const result = await agentCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { status: "verified", verified: true } }
-    );
-
-    // console.log(result);
-
-    if (result.matchedCount === 0) {
-      return res.status(404).send({ message: "Property not found" });
-    }
-
-    // Also update in agentCollection
-    await agentCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { status: "verified", verified: true } }
-    );
-
-    res.send({ 
-      success: true,
-      message: "Property verified successfully"
+    // Get all properties for admin management
+    app.get("/properties", async (req, res) => {
+      const result = await agentCollection.find().toArray();
+      res.send(result);
     });
-  } catch (error) {
-    console.error("Error verifying property:", error);
-    res.status(500).send({ message: "Failed to verify property" });
-  }
-});
 
-// Reject a property
-app.patch("/properties/reject/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-    
-    const result = await agentCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { status: "rejected", verified: false } }
-    );
+    app.patch("/properties/verify/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
 
-    // console.log(result);
+        // Update in propertyCollection
+        const result = await agentCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: "verified", verified: true } }
+        );
 
-    if (result.matchedCount === 0) {
-      return res.status(404).send({ message: "Property not found" });
-    }
+        // console.log(result);
 
-    // Also update in agentCollection
-    await agentCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { status: "rejected", verified: false } }
-    );
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: "Property not found" });
+        }
 
-    res.send({ 
-      success: true,
-      message: "Property rejected successfully"
+        // Also update in agentCollection
+        await agentCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: "verified", verified: true } }
+        );
+
+        res.send({
+          success: true,
+          message: "Property verified successfully",
+        });
+      } catch (error) {
+        console.error("Error verifying property:", error);
+        res.status(500).send({ message: "Failed to verify property" });
+      }
     });
-  } catch (error) {
-    console.error("Error rejecting property:", error);
-    res.status(500).send({ message: "Failed to reject property" });
-  }
-});
 
-    
+    // Reject a property
+    app.patch("/properties/reject/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        const result = await agentCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: "rejected", verified: false } }
+        );
+
+        // console.log(result);
+
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: "Property not found" });
+        }
+
+        // Also update in agentCollection
+        await agentCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: "rejected", verified: false } }
+        );
+
+        res.send({
+          success: true,
+          message: "Property rejected successfully",
+        });
+      } catch (error) {
+        console.error("Error rejecting property:", error);
+        res.status(500).send({ message: "Failed to reject property" });
+      }
+    });
+
     // user=========================
     // make offer er id
     // Add this route to your server code
@@ -636,8 +636,13 @@ app.patch("/properties/reject/:id", async (req, res) => {
     });
 
     // GET: Wishlist by user email
-    app.get("/wishlist", async (req, res) => {
+    app.get("/wishlist", verifyFireBaseToken, async (req, res) => {
       const email = req.query.email;
+
+      if (req.decoded.email !== email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+
       const result = await wishListCollection
         .find({ userEmail: email })
         .toArray();
@@ -654,12 +659,17 @@ app.patch("/properties/reject/:id", async (req, res) => {
     });
 
 
+
     // agents site ===================
 
     // ✅ Get properties by agent email (My Added Properties)
-    app.get("/myAddedProperty", async (req, res) => {
+    app.get("/myAddedProperty", verifyFireBaseToken, async (req, res) => {
       try {
         const email = req.query.email;
+
+        if (req.decoded.email !== email) {
+          return res.status(403).send({ message: "forbidden access" });
+        }
 
         if (!email) {
           return res.status(400).send({ message: "Email query is required" });
@@ -676,45 +686,55 @@ app.patch("/properties/reject/:id", async (req, res) => {
 
     // add property er form post
     // Update the add property endpoint
-app.post("/addProperty", async (req, res) => {
-    const propertyData = req.body;
-    // console.log(propertyData);
+    app.post("/addProperty", async (req, res) => {
+      const propertyData = req.body;
+      // console.log(propertyData);
 
-    // Validate required fields
-    if (!propertyData.title || !propertyData.location || !propertyData.imageUrl || 
-        !propertyData.agentEmail || !propertyData.price) {
-      return res.status(400).json({ 
-        success: false,
-        error: "Missing required fields" 
+      // Validate required fields
+      if (
+        !propertyData.title ||
+        !propertyData.location ||
+        !propertyData.imageUrl ||
+        !propertyData.agentEmail ||
+        !propertyData.price
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required fields",
+        });
+      }
+
+      //   // Ensure price is properly formatted
+      if (
+        typeof propertyData.price !== "object" ||
+        !propertyData.price.min ||
+        !propertyData.price.max
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid price format",
+        });
+      }
+
+      //   // Set default values
+      propertyData.status = "pending";
+      propertyData.verified = false;
+      propertyData.createdAt = new Date();
+
+      //   // Insert into both collections
+      const [agentResult, propertyResult] = await Promise.all([
+        agentCollection.insertOne(propertyData),
+        propertyCollection.insertOne(
+          propertyData
+        ) /**========*****===========propertyCollection  insertOne */,
+      ]);
+
+      res.status(201).json({
+        success: true,
+        agentInsertedId: agentResult.insertedId,
+        propertyInsertedId: propertyResult.insertedId,
       });
-    }
-
-  //   // Ensure price is properly formatted
-    if (typeof propertyData.price !== 'object' || 
-        !propertyData.price.min || !propertyData.price.max) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid price format"
-      });
-    }
-
-  //   // Set default values
-    propertyData.status = "pending";
-    propertyData.verified = false;
-    propertyData.createdAt = new Date();
-
-  //   // Insert into both collections
-    const [agentResult, propertyResult] = await Promise.all([
-      agentCollection.insertOne(propertyData),
-      propertyCollection.insertOne(propertyData)   /**========*****===========propertyCollection  insertOne */
-    ]);
-
-    res.status(201).json({
-      success: true,
-      agentInsertedId: agentResult.insertedId,
-      propertyInsertedId: propertyResult.insertedId
     });
-});
 
     // agent property delete
     app.delete("/property/:id", async (req, res) => {
@@ -747,13 +767,19 @@ app.post("/addProperty", async (req, res) => {
 
     // ---
     // requested property
-    app.get("/offers/agent", async (req, res) => {
+    app.get("/offers/agent",verifyFireBaseToken, async (req, res) => {
       const { email } = req.query;
+
+if(req.decoded.email !== email){
+        return  res.status(403).send({ message: 'forbidden access' })
+      }
+
       try {
         const result = await offerCollection
           .find({ agentEmail: email })
           .toArray();
-        // console.log(result);
+
+        console.log(result);
         res.send(result);
       } catch (error) {
         res.status(500).send({ message: "Failed to fetch offers" });
@@ -789,7 +815,7 @@ app.post("/addProperty", async (req, res) => {
         if (propertyId) {
           await agentCollection.updateOne(
             { _id: new ObjectId(propertyId) },
-            { $set: { status: "sold" } }
+            { $set: { status: "bought" } }
           );
         }
 
@@ -806,78 +832,83 @@ app.post("/addProperty", async (req, res) => {
       }
     });
 
-// Add this new route to your server code after the existing payment routes
+    // Add this new route to your server code after the existing payment routes
 
-// Update offer status to bought after payment
-app.put('/offer/:id/buy', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { transactionId } = req.body;
+    // Update offer status to bought after payment
+    app.put("/offer/:id/buy", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { transactionId } = req.body;
 
-    const result = await offerCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { 
-        $set: { 
-          status: 'bought', 
-          transactionId, 
-          paidAt: new Date() 
-        } 
-      }
-    );
+        const result = await offerCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              status: "bought",
+              transactionId,
+              paidAt: new Date(),
+            },
+          }
+        );
 
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ error: 'Offer not found' });
-    }
-
-    res.json({ success: true, message: 'Offer status updated successfully' });
-  } catch (error) {
-    console.error('Error updating offer:', error);
-    res.status(500).json({ error: 'Failed to update offer status' });
-  }
-});
-
-// Update the existing property payment route to also update offer
-app.put('/property/:id/pay', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { transactionId, offerId } = req.body;
-
-    // Update property status
-    const propertyResult = await Promise.all([
-      agentCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { status: 'sold', transactionId, soldAt: new Date() } }
-      ),
-      propertyCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { status: 'sold', transactionId, soldAt: new Date() } }       /*================propertyCollection*/
-      )
-    ]);
-
-    // Update offer status to bought if offerId provided
-    if (offerId) {
-      await offerCollection.updateOne(
-        { _id: new ObjectId(offerId) },
-        { 
-          $set: { 
-            status: 'bought', 
-            transactionId, 
-            paidAt: new Date() 
-          } 
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ error: "Offer not found" });
         }
-      );
-    }
 
-    if (propertyResult[0].matchedCount === 0) {
-      return res.status(404).json({ error: 'Property not found' });
-    }
+        res.json({
+          success: true,
+          message: "Offer status updated successfully",
+        });
+      } catch (error) {
+        console.error("Error updating offer:", error);
+        res.status(500).json({ error: "Failed to update offer status" });
+      }
+    });
 
-    res.json({ success: true, message: 'Payment recorded successfully' });
-  } catch (error) {
-    console.error('Error recording payment:', error);
-    res.status(500).json({ error: 'Failed to record payment' });
-  }
-});
+    // Update the existing property payment route to also update offer
+    app.put("/property/:id/pay", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { transactionId, offerId } = req.body;
+
+        // Update property status
+        const propertyResult = await Promise.all([
+          agentCollection.updateOne(
+            { _id: new ObjectId(id) },
+            { $set: { status: "sold", transactionId, soldAt: new Date() } }
+          ),
+          propertyCollection.updateOne(
+            { _id: new ObjectId(id) },
+            {
+              $set: { status: "sold", transactionId, soldAt: new Date() },
+            } /*================propertyCollection*/
+          ),
+        ]);
+
+        // Update offer status to bought if offerId provided
+        if (offerId) {
+          await offerCollection.updateOne(
+            { _id: new ObjectId(offerId) },
+            {
+              $set: {
+                status: "bought",
+                transactionId,
+                paidAt: new Date(),
+              },
+            }
+          );
+        }
+
+        if (propertyResult[0].matchedCount === 0) {
+          return res.status(404).json({ error: "Property not found" });
+        }
+
+        res.json({ success: true, message: "Payment recorded successfully" });
+      } catch (error) {
+        console.error("Error recording payment:", error);
+        res.status(500).json({ error: "Failed to record payment" });
+      }
+    });
 
     // PATCH: Reject an offer
     app.patch("/offers/reject/:id", async (req, res) => {
@@ -917,87 +948,97 @@ app.put('/property/:id/pay', async (req, res) => {
     });
     // --------
     // GET /sold-properties?agentEmail=agent@gamil.com
-app.get("/sold-properties", async (req, res) => {
-  const agentEmail = req.query.agentEmail;
-  const sold = await offerCollection.find({
-    agentEmail,
-    status: "bought", // Only paid offers
-  }).toArray();
+    app.get("/sold-properties",verifyFireBaseToken, async (req, res) => {
+      const agentEmail = req.query.agentEmail;
 
-  console.log(sold);
+if(req.decoded.email !== agentEmail){
+        return  res.status(403).send({ message: 'forbidden access' })
+      }
 
-  res.send(sold);
-});
+      const sold = await offerCollection
+        .find({
+          agentEmail,
+          status: "bought", // Only paid offers
+        })
+        .toArray();
 
-// stripe
-// Create payment intent
-app.post('/create-payment-intent', async (req, res) => {
-  try {
-    const { amountInCents, propertyId } = req.body;
-    console.log(amountInCents, propertyId);
+      console.log(sold);
 
-    
-    if (!amountInCents || !propertyId) {
-      return res.status(400).json({ error: 'Amount and propertyId required' });
-    }
-
-    const property = await agentCollection.findOne({ 
-      _id: new ObjectId(propertyId) 
+      res.send(sold);
     });
 
-    console.log(property);
+    // stripe
+    // Create payment intent
+    app.post("/create-payment-intent", async (req, res) => {
+      try {
+        const { amountInCents, propertyId } = req.body;
+        console.log(amountInCents, propertyId);
 
-    if (!property) {
-      return res.status(404).json({ error: 'Property not found' });
-    }
+        if (!amountInCents || !propertyId) {
+          return res
+            .status(400)
+            .json({ error: "Amount and propertyId required" });
+        }
 
-    // if (property.status === 'sold') {
-    //   console.log(property.status);
-      
-    //   return res.status(400).json({ error: 'Property already sold' });
-    // }
+        const property = await agentCollection.findOne({
+          _id: new ObjectId(propertyId),
+        });
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountInCents,
-      currency: 'usd',
-      payment_method_types: ['card'],
-      metadata: { propertyId },
+        console.log(property);
+
+        if (!property) {
+          return res.status(404).json({ error: "Property not found" });
+        }
+
+        // if (property.status === 'sold') {
+        //   console.log(property.status);
+
+        //   return res.status(400).json({ error: 'Property already sold' });
+        // }
+
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amountInCents,
+          currency: "usd",
+          payment_method_types: ["card"],
+          metadata: { propertyId },
+        });
+
+        res.json({ clientSecret: paymentIntent.client_secret });
+      } catch (error) {
+        console.error("Error creating payment intent:", error);
+        res.status(500).json({ error: "Failed to create payment intent" });
+      }
     });
 
-    res.json({ clientSecret: paymentIntent.client_secret });
-  } catch (error) {
-    console.error('Error creating payment intent:', error);
-    res.status(500).json({ error: 'Failed to create payment intent' });
-  }
-});
+    // Update property payment status
+    app.put("/property/:id/pay", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { transactionId } = req.body;
 
-// Update property payment status
-app.put('/property/:id/pay', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { transactionId } = req.body;
+        const result = await Promise.all([
+          agentCollection.updateOne(
+            { _id: new ObjectId(id) },
+            { $set: { status: "sold", transactionId, soldAt: new Date() } }
+          ),
+          propertyCollection.updateOne(
+            { _id: new ObjectId(id) },
+            {
+              $set: { status: "sold", transactionId, soldAt: new Date() },
+            } /**======propertycollection */
+          ),
+        ]);
 
-    const result = await Promise.all([
-      agentCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { status: 'sold', transactionId, soldAt: new Date() } }
-      ),
-      propertyCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { status: 'sold', transactionId, soldAt: new Date() } }  /**======propertycollection */
-      )
-    ]);
+        if (result[0].matchedCount === 0) {
+          return res.status(404).json({ error: "Property not found" });
+        }
 
-    if (result[0].matchedCount === 0) {
-      return res.status(404).json({ error: 'Property not found' });
-    }
-
-    res.json({ success: true, message: 'Payment recorded successfully' });
-  } catch (error) {
-    console.error('Error recording payment:', error);
-    res.status(500).json({ error: 'Failed to record payment' });
-  }
-});
+        res.json({ success: true, message: "Payment recorded successfully" });
+      } catch (error) {
+        console.error("Error recording payment:", error);
+        res.status(500).json({ error: "Failed to record payment" });
+      }
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
