@@ -35,7 +35,59 @@ async function run() {
     const offerCollection = db.collection("offers");
     const propertyCollection = db.collection("property");
 
-    // get user role
+     // jwt token
+    const verifyFireBaseToken = async(req,res,next)=>{
+      const authHeader = req.headers.authorization 
+          // console.log(authHeader)
+      if(!authHeader){
+        return res.status(401).send({message: "unauthorized access"})
+      }
+      const token = authHeader.split(' ')[1]
+      if(!token){
+        return res.status(401).send({message: "unauthorized access"})
+      }
+      try {
+        const decoded = await admin.auth().verifyIdToken(token)
+        req.decoded = decoded 
+        next()
+      } 
+      catch (error) {
+        console.log(error)
+      }
+    }
+
+
+    // verifyAdmin
+     const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email }
+            const user = await usersCollection.findOne(query);
+            if (!user || user.role !== 'admin') {
+                return res.status(403).send({ message: 'forbidden access' })
+            }
+            next();
+        }
+// admin role set korar jonno
+         app.patch("/users/:id/role",verifyFireBaseToken,verifyAdmin, async (req, res) => {
+            const { id } = req.params;
+            const { role } = req.body; 
+
+            if (!["admin", "user"].includes(role)) {
+                return res.status(400).send({ message: "Invalid role" });
+            }
+
+            try {
+                const result = await usersCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    { $set: { role } }
+                );
+                res.send({ message: `User role updated to ${role}`, result });
+            } catch (error) {
+                console.error("Error updating user role", error);
+                res.status(500).send({ message: "Failed to update user role" });
+            }
+        });
+    // get user role by email
     app.get("/users/:email/role", async (req, res) => {
       const email = req.params.email;
       if (!email) {
@@ -47,6 +99,9 @@ async function run() {
       }
       res.send({ role: user.role || "user" });
     });
+
+    
+
 
     //  register kora gular api
     app.post("/users", async (req, res) => {
@@ -120,7 +175,7 @@ async function run() {
     // Get verified properties
 app.get("/properties/verified", async (req, res) => {
   try {
-    const verified = await propertyCollection
+    const verified = await agentCollection
       .find({ verified: true })
       .toArray();
     res.send(verified);
@@ -133,7 +188,7 @@ app.get("/properties/verified", async (req, res) => {
 // Patch advertise status
 app.patch("/properties/advertise/:id", async (req, res) => {
   try {
-    const result = await propertyCollection.updateOne(
+    const result = await agentCollection.updateOne(
       { _id: new ObjectId(req.params.id) },
       { $set: { isAdvertised: true } }
     );
@@ -141,6 +196,40 @@ app.patch("/properties/advertise/:id", async (req, res) => {
   } catch (error) {
     console.error("Advertise error:", error);
     res.status(500).send({ message: "Failed to advertise property" });
+  }
+});
+// Replace the existing /properties/advertised endpoint with this:
+app.get("/propertiess/advertised", async (req, res) => {
+  try {
+    // Get advertised properties from agentCollection (where properties are actually stored)===============
+    const advertised = await agentCollection
+      .find({ 
+        isAdvertised: true,
+        verified: true,
+        status: "verified" // or "approved" depending on your schema
+      })
+      .sort({ date: -1 }) // Sort by latest first
+         .limit(4) // Only return top 3
+      .toArray();
+    
+    // Transform data to match frontend expectations
+    const transformed = advertised.map(property => ({
+      _id: property._id,
+      title: property.title,
+      location: property.location,
+      price: `${property.price.min} - ${property.price.max}`,
+      image: property.imageUrl, // Frontend expects 'image' but we have 'imageUrl'
+      verified: property.verified,
+      agentName: property.agentName
+    }));
+
+    res.send(transformed);
+  } catch (error) {
+    console.error("Advertised properties error:", error);
+    res.status(500).send({ 
+      message: "Failed to fetch advertised properties",
+      error: error.message
+    });
   }
 });
 
@@ -312,74 +401,6 @@ app.patch("/properties/advertise/:id", async (req, res) => {
       }
     });
 
-
-    // admin==============
-// advertise id dore 
-  // advertise id route
-app.patch("/properties/advertise/:id", async (req, res) => {
-  const id = req.params.id;
-  try {
-    const result = await propertyCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { isAdvertised: true } } // Fixed typo: isAdvertised -> isAdvertised
-    );
-    res.send(result);
-  } catch (error) {
-    console.error("Advertise error:", error); // Added logging
-    res.status(500).send({ message: "Failed to advertise property" });
-  }
-});
-
-// advertised properties route
-app.get("/properties/advertised", async (req, res) => {
-  try {
-    const advertised = await propertyCollection
-      .find({ 
-        isAdvertised: true, 
-        verified: true,
-        status: "approved" // Add status filter if needed
-      })
-      .toArray();
-    res.send(advertised);
-  } catch (error) {
-    console.error("Advertised properties error:", error); // Added logging
-    res.status(500).send({ message: "Failed to fetch advertised properties" });
-  }
-});
-
-// verified properties route
-app.get("/properties/verified", async (req, res) => {
-  const pro = await propertyCollection.find().toArray()
-  console.log(pro);
-  res.send(pro)
-  // try {
-  //   // First check if the collection exists
-  //   const collections = await db.listCollections().toArray();
-  //   const collectionExists = collections.some(col => col.name === "property");
-    
-  //   if (!collectionExists) {
-  //     return res.status(404).send({ message: "Property collection not found" });
-  //   }
-
-  //   // Then try the query
-  //   const verified = await propertyCollection
-  //     .find({ 
-  //       verified: true,
-  //       isAdvertised: false,
-  //       // Make status filter optional if not all properties have it
-  //       ...(req.query.requireStatus ? { status: "approved" } : {})
-  //     })
-  //     .toArray();
-    
-  //   res.send(verified);
-  // } catch (error) {
-  //   console.error("Verified properties error:", error);
-  //   res.status(500).send({ 
-  //     message: "Failed to fetch verified properties",
-  //     error: error.message // Include the actual error message
-  //   });
-  // }
-});
 
 
 
@@ -685,7 +706,7 @@ app.post("/addProperty", async (req, res) => {
   //   // Insert into both collections
     const [agentResult, propertyResult] = await Promise.all([
       agentCollection.insertOne(propertyData),
-      propertyCollection.insertOne(propertyData)
+      propertyCollection.insertOne(propertyData)   /**========*****===========propertyCollection  insertOne */
     ]);
 
     res.status(201).json({
@@ -739,7 +760,7 @@ app.post("/addProperty", async (req, res) => {
       }
     });
 
-    // PATCH: Accept an offer===============================================================================================
+    // PATCH: Accept an offer
     app.patch("/offers/accept/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -829,7 +850,7 @@ app.put('/property/:id/pay', async (req, res) => {
       ),
       propertyCollection.updateOne(
         { _id: new ObjectId(id) },
-        { $set: { status: 'sold', transactionId, soldAt: new Date() } }
+        { $set: { status: 'sold', transactionId, soldAt: new Date() } }       /*================propertyCollection*/
       )
     ]);
 
@@ -963,7 +984,7 @@ app.put('/property/:id/pay', async (req, res) => {
       ),
       propertyCollection.updateOne(
         { _id: new ObjectId(id) },
-        { $set: { status: 'sold', transactionId, soldAt: new Date() } }
+        { $set: { status: 'sold', transactionId, soldAt: new Date() } }  /**======propertycollection */
       )
     ]);
 
