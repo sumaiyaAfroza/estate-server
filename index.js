@@ -48,6 +48,18 @@ async function run() {
       res.send({ role: user.role || "user" });
     });
 
+    //  register kora gular api
+    app.post("/users", async (req, res) => {
+      const email = req.body.email;
+      const existingUser = await usersCollection.findOne({ email });
+      if (existingUser) {
+        return res.status(200).send({ message: "user already exists" });
+      }
+      const user = req.body; 
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    });
+
     // user er My profile
     app.get("/profile", async (req, res) => {
       const email = req.query.email;
@@ -96,7 +108,7 @@ async function run() {
         if (!property) {
           return res.status(404).json({ error: "Property not found" });
         }
-        console.log(property);
+        // console.log(property);
 
         res.send(property);
       } catch (error) {
@@ -104,17 +116,36 @@ async function run() {
       }
     });
 
-    //  register kora gular api
-    app.post("/users", async (req, res) => {
-      const email = req.body.email;
-      const existingUser = await usersCollection.findOne({ email });
-      if (existingUser) {
-        return res.status(200).send({ message: "user already exists" });
-      }
-      const user = req.body;
-      const result = await usersCollection.insertOne(user);
-      res.send(result);
-    });
+    // home er advertise
+    // Get verified properties
+app.get("/properties/verified", async (req, res) => {
+  try {
+    const verified = await propertyCollection
+      .find({ verified: true })
+      .toArray();
+    res.send(verified);
+  } catch (error) {
+    console.error("Error fetching verified properties:", error);
+    res.status(500).send({ message: "Failed to fetch verified properties" });
+  }
+});
+
+// Patch advertise status
+app.patch("/properties/advertise/:id", async (req, res) => {
+  try {
+    const result = await propertyCollection.updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: { isAdvertised: true } }
+    );
+    res.send(result);
+  } catch (error) {
+    console.error("Advertise error:", error);
+    res.status(500).send({ message: "Failed to advertise property" });
+  }
+});
+
+
+    
 
     // Get latest reviews
     app.get("/reviews/latest", async (req, res) => {
@@ -282,11 +313,77 @@ async function run() {
     });
 
 
-
-
-
-
     // admin==============
+// advertise id dore 
+  // advertise id route
+app.patch("/properties/advertise/:id", async (req, res) => {
+  const id = req.params.id;
+  try {
+    const result = await propertyCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { isAdvertised: true } } // Fixed typo: isAdvertised -> isAdvertised
+    );
+    res.send(result);
+  } catch (error) {
+    console.error("Advertise error:", error); // Added logging
+    res.status(500).send({ message: "Failed to advertise property" });
+  }
+});
+
+// advertised properties route
+app.get("/properties/advertised", async (req, res) => {
+  try {
+    const advertised = await propertyCollection
+      .find({ 
+        isAdvertised: true, 
+        verified: true,
+        status: "approved" // Add status filter if needed
+      })
+      .toArray();
+    res.send(advertised);
+  } catch (error) {
+    console.error("Advertised properties error:", error); // Added logging
+    res.status(500).send({ message: "Failed to fetch advertised properties" });
+  }
+});
+
+// verified properties route
+app.get("/properties/verified", async (req, res) => {
+  const pro = await propertyCollection.find().toArray()
+  console.log(pro);
+  res.send(pro)
+  // try {
+  //   // First check if the collection exists
+  //   const collections = await db.listCollections().toArray();
+  //   const collectionExists = collections.some(col => col.name === "property");
+    
+  //   if (!collectionExists) {
+  //     return res.status(404).send({ message: "Property collection not found" });
+  //   }
+
+  //   // Then try the query
+  //   const verified = await propertyCollection
+  //     .find({ 
+  //       verified: true,
+  //       isAdvertised: false,
+  //       // Make status filter optional if not all properties have it
+  //       ...(req.query.requireStatus ? { status: "approved" } : {})
+  //     })
+  //     .toArray();
+    
+  //   res.send(verified);
+  // } catch (error) {
+  //   console.error("Verified properties error:", error);
+  //   res.status(500).send({ 
+  //     message: "Failed to fetch verified properties",
+  //     error: error.message // Include the actual error message
+  //   });
+  // }
+});
+
+
+
+
 
     // Get all users
     app.get("/users", async (req, res) => {
@@ -402,7 +499,7 @@ async function run() {
     app.get("/allReviews", async (req, res) => {
   try {
     const reviews = await reviewsCollection.find().toArray();
-    console.log(reviews);
+    // console.log(reviews);
 
     res.send(reviews);
   } catch (error) {
@@ -536,8 +633,6 @@ app.patch("/properties/reject/:id", async (req, res) => {
     });
 
 
-
-
     // agents site ===================
 
     // ✅ Get properties by agent email (My Added Properties)
@@ -562,7 +657,7 @@ app.patch("/properties/reject/:id", async (req, res) => {
     // Update the add property endpoint
 app.post("/addProperty", async (req, res) => {
     const propertyData = req.body;
-    console.log(propertyData);
+    // console.log(propertyData);
 
     // Validate required fields
     if (!propertyData.title || !propertyData.location || !propertyData.imageUrl || 
@@ -598,13 +693,6 @@ app.post("/addProperty", async (req, res) => {
       agentInsertedId: agentResult.insertedId,
       propertyInsertedId: propertyResult.insertedId
     });
-  // } catch (error) {
-  //   console.error("Error adding property:", error);
-  //   res.status(500).json({ 
-  //     success: false,
-  //     error: error.message 
-  //   });
-  // }
 });
 
     // agent property delete
@@ -644,7 +732,7 @@ app.post("/addProperty", async (req, res) => {
         const result = await offerCollection
           .find({ agentEmail: email })
           .toArray();
-        console.log(result);
+        // console.log(result);
         res.send(result);
       } catch (error) {
         res.status(500).send({ message: "Failed to fetch offers" });
@@ -697,7 +785,7 @@ app.post("/addProperty", async (req, res) => {
       }
     });
 
-    // Add this new route to your server code after the existing payment routes
+// Add this new route to your server code after the existing payment routes
 
 // Update offer status to bought after payment
 app.put('/offer/:id/buy', async (req, res) => {
@@ -807,20 +895,18 @@ app.put('/property/:id/pay', async (req, res) => {
       }
     });
     // --------
-    // GET /sold-properties?agentEmail=agent@example.com
+    // GET /sold-properties?agentEmail=agent@gamil.com
 app.get("/sold-properties", async (req, res) => {
   const agentEmail = req.query.agentEmail;
-  const sold = await agentCollection.find({
+  const sold = await offerCollection.find({
     agentEmail,
-    status: "sold", // Only paid offers
+    status: "bought", // Only paid offers
   }).toArray();
+
+  console.log(sold);
 
   res.send(sold);
 });
-
-
-
-
 
 // stripe
 // Create payment intent
@@ -891,11 +977,6 @@ app.put('/property/:id/pay', async (req, res) => {
     res.status(500).json({ error: 'Failed to record payment' });
   }
 });
-
-
-
-
-
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
