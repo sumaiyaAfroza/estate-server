@@ -628,15 +628,39 @@ async function run() {
       }
     });
 
-    // POST: Add to Wishlist
-    app.post("/wishlist", async (req, res) => {
-      const wishlistItem = req.body;
+    // POST: Add to Wishlist=-.................................................
+   app.post("/wishlist", async (req, res) => {
+  const wishlistItem = req.body;
+  const { email, propertyId } = wishlistItem;
 
-      // console.log(wishlistItem);
-
-      const result = await wishListCollection.insertOne(wishlistItem);
-      res.send(result);
+  try {
+    // 🔍 Convert propertyId to ObjectId if it's a valid id
+    const existing = await wishListCollection.findOne({
+      email,
+      propertyId: new ObjectId(propertyId),
     });
+
+    if (existing) {
+      return res.status(400).send({
+        success: false,
+        message: "Sorry, this property is already in your wishlist.",
+      });
+    }
+
+    // ✅ Save original propertyId as ObjectId to be consistent
+    wishlistItem.propertyId = new ObjectId(propertyId);
+
+    const result = await wishListCollection.insertOne(wishlistItem);
+    res.send({
+      success: true,
+      message: "Added to wishlist successfully.",
+      data: result,
+    });
+  } catch (error) {
+    console.error("Wishlist insert error:", error);
+    res.status(500).send({ success: false, message: "Server error" });
+  }
+});
 
     // GET: Wishlist by user email
     app.get("/wishlist", verifyFireBaseToken, async (req, res) => {
@@ -913,7 +937,6 @@ if(req.decoded.email !== email){
         res.status(500).json({ error: "Failed to record payment" });
       }
     });
-
     // PATCH: Reject an offer
     app.patch("/offers/reject/:id", async (req, res) => {
       try {
@@ -1014,35 +1037,36 @@ if(req.decoded.email !== agentEmail){
       }
     });
 
+
     // Update property payment status
-    app.put("/property/:id/pay", async (req, res) => {
-      try {
-        const { id } = req.params;
-        const { transactionId } = req.body;
+    // app.put("/property/:id/pay", async (req, res) => {
+    //   try {
+    //     const { id } = req.params;
+    //     const { transactionId } = req.body;
 
-        const result = await Promise.all([
-          agentCollection.updateOne(
-            { _id: new ObjectId(id) },
-            { $set: { status: "sold", transactionId, soldAt: new Date() } }
-          ),
-          propertyCollection.updateOne(
-            { _id: new ObjectId(id) },
-            {
-              $set: { status: "sold", transactionId, soldAt: new Date() },
-            } /**======propertycollection */
-          ),
-        ]);
+    //     const result = await Promise.all([
+    //       agentCollection.updateOne(
+    //         { _id: new ObjectId(id) },
+    //         { $set: { status: "sold", transactionId, soldAt: new Date() } }
+    //       ),
+    //       propertyCollection.updateOne(
+    //         { _id: new ObjectId(id) },
+    //         {
+    //           $set: { status: "sold", transactionId, soldAt: new Date() },
+    //         } /**======propertycollection */
+    //       ),
+    //     ]);
 
-        if (result[0].matchedCount === 0) {
-          return res.status(404).json({ error: "Property not found" });
-        }
+    //     if (result[0].matchedCount === 0) {
+    //       return res.status(404).json({ error: "Property not found" });
+    //     }
 
-        res.json({ success: true, message: "Payment recorded successfully" });
-      } catch (error) {
-        console.error("Error recording payment:", error);
-        res.status(500).json({ error: "Failed to record payment" });
-      }
-    });
+    //     res.json({ success: true, message: "Payment recorded successfully" });
+    //   } catch (error) {
+    //     console.error("Error recording payment:", error);
+    //     res.status(500).json({ error: "Failed to record payment" });
+    //   }
+    // });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
