@@ -321,6 +321,9 @@ async function run() {
           return res.status(403).send({ message: "forbidden access" });
         }
 
+        // console.log(email,'email');
+        // console.log('decoded', req.decoded);
+
         const userReviews = await reviewsCollection
           .find({ email: email })
           .sort({ date: -1 }) // Show latest reviews first
@@ -638,6 +641,7 @@ async function run() {
     // GET: Wishlist by user email
     app.get("/wishlist", verifyFireBaseToken, async (req, res) => {
       const email = req.query.email;
+      // console.log(email, req.decoded.email);
 
       if (req.decoded.email !== email) {
         return res.status(403).send({ message: "forbidden access" });
