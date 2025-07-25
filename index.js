@@ -141,14 +141,20 @@ async function run() {
     // All properties
     app.get("/allProperties", async (req, res) => {
       const { location, sort } = req.query;
-      const query = location
-        ? { location: { $regex: location, $options: "i" } }
-        : {};
+      // Always filter for verified properties
+      const query = {
+        status: "verified",
+        verified: true,
+        ...(location ? { location: { $regex: location, $options: "i" } } : {})
+      };
+      // const query = location
+      //   ? { location: { $regex: location, $options: "i" } }
+      //   : {};
       const sortOption =
         sort === "asc" ? { price: 1 } : sort === "desc" ? { price: -1 } : {};
 
       const result = await agentCollection
-        .find(query)
+        .find( query ,{status: "verified",verified: true,})
         .sort(sortOption)
         .toArray();
       res.send(result);
