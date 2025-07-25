@@ -1,6 +1,6 @@
 require("dotenv").config();
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cors = require("cors");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const admin = require("firebase-admin");
@@ -76,7 +76,7 @@ async function run() {
         const { id } = req.params;
         const { role } = req.body;
 
-        if (!["admin", "user"].includes(role)) {
+        if (!["admin","agent", "user"].includes(role)) {
           return res.status(400).send({ message: "Invalid role" });
         }
 
@@ -92,7 +92,7 @@ async function run() {
         }
       }
     );
-    // get user role by email
+    // get user role by email - useUserRole er email disi tai
     app.get("/users/:email/role", async (req, res) => {
       const email = req.params.email;
       if (!email) {
@@ -1073,6 +1073,7 @@ if(req.decoded.email !== agentEmail){
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
+
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
