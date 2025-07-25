@@ -71,9 +71,59 @@ async function run() {
       next();
     };
 
-    // admin role set korar jonno                       
-    app.patch("/users/:id/role", verifyFireBaseToken,async (req, res) => {
-        const { id } = req.params;
+    // admin route er dashboard
+    // Assuming Express.js, MongoDB client, and collections are set up.
+// fraud btn id dore
+app.patch("/users/:id/fraud", verifyFireBaseToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Mark user as fraud
+    const userUpdateResult = await usersCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { fraud: true } }
+    );
+
+    // Remove all properties added by this agent
+    // Assumes properties have a 'agentId' field that matches user's _id as string
+    const propertiesDeleteResult = await agentCollection.deleteMany({
+      agentId: id,
+    });
+
+    res.send({
+      message: "User marked as fraud and properties deleted",
+      userUpdateResult,
+      propertiesDeleteResult,
+    });
+  } catch (error) {
+    console.error("Error marking user as fraud", error);
+    res.status(500).send({ message: "Failed to mark user as fraud" });
+  }
+});
+// fraud btn jonno
+app.post("/properties", verifyFireBaseToken, async (req, res) => {
+  const { agentId, ...propertyData } = req.body;
+
+  // Check if agent is fraud
+  const user = await usersCollection.findOne({ _id: new ObjectId(agentId) });
+
+  if (user?.fraud) {
+    return res
+      .status(403)
+      .send({ message: "Agent is marked as fraud and cannot add properties." });
+  }
+
+  // proceed with adding property
+  const result = await agentCollection.insertOne({ agentId, ...propertyData });
+  res.send({ message: "Property added", result });
+});
+
+
+
+
+    // admin role set korar jonno
+    app.patch("/users/:id/role", verifyFireBaseToken, async (req, res) => {
+      const { id } = req.params;
         const { role } = req.body;
 
         if (!["admin","agent", "user"].includes(role)) {
