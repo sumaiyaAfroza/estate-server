@@ -73,75 +73,78 @@ async function run() {
 
     // admin route er dashboard
     // Assuming Express.js, MongoDB client, and collections are set up.
-// fraud btn id dore
-app.patch("/users/:id/fraud", verifyFireBaseToken, async (req, res) => {
-  const { id } = req.params;
+    // fraud btn id dore
+    app.patch("/users/:id/fraud", verifyFireBaseToken, async (req, res) => {
+      const { id } = req.params;
 
-  try {
-    // Mark user as fraud
-    const userUpdateResult = await usersCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { fraud: true } }
-    );
+      try {
+        // Mark user as fraud
+        const userUpdateResult = await usersCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { fraud: true } }
+        );
 
-    // Remove all properties added by this agent
-    // Assumes properties have a 'agentId' field that matches user's _id as string
-    const propertiesDeleteResult = await agentCollection.deleteMany({
-      agentId: id,
+        // Remove all properties added by this agent
+        // Assumes properties have a 'agentId' field that matches user's _id as string
+        const propertiesDeleteResult = await agentCollection.deleteMany({
+          agentId: id,
+        });
+
+        res.send({
+          message: "User marked as fraud and properties deleted",
+          userUpdateResult,
+          propertiesDeleteResult,
+        });
+      } catch (error) {
+        console.error("Error marking user as fraud", error);
+        res.status(500).send({ message: "Failed to mark user as fraud" });
+      }
     });
+    // fraud btn jonno
+    app.post("/properties", verifyFireBaseToken, async (req, res) => {
+      const { agentId, ...propertyData } = req.body;
 
-    res.send({
-      message: "User marked as fraud and properties deleted",
-      userUpdateResult,
-      propertiesDeleteResult,
+      // Check if agent is fraud
+      const user = await usersCollection.findOne({
+        _id: new ObjectId(agentId),
+      });
+
+      if (user?.fraud) {
+        return res
+          .status(403)
+          .send({
+            message: "Agent is marked as fraud and cannot add properties.",
+          });
+      }
+
+      // proceed with adding property
+      const result = await agentCollection.insertOne({
+        agentId,
+        ...propertyData,
+      });
+      res.send({ message: "Property added", result });
     });
-  } catch (error) {
-    console.error("Error marking user as fraud", error);
-    res.status(500).send({ message: "Failed to mark user as fraud" });
-  }
-});
-// fraud btn jonno
-app.post("/properties", verifyFireBaseToken, async (req, res) => {
-  const { agentId, ...propertyData } = req.body;
-
-  // Check if agent is fraud
-  const user = await usersCollection.findOne({ _id: new ObjectId(agentId) });
-
-  if (user?.fraud) {
-    return res
-      .status(403)
-      .send({ message: "Agent is marked as fraud and cannot add properties." });
-  }
-
-  // proceed with adding property
-  const result = await agentCollection.insertOne({ agentId, ...propertyData });
-  res.send({ message: "Property added", result });
-});
-
-
-
 
     // admin role set korar jonno
     app.patch("/users/:id/role", verifyFireBaseToken, async (req, res) => {
       const { id } = req.params;
-        const { role } = req.body;
+      const { role } = req.body;
 
-        if (!["admin","agent", "user"].includes(role)) {
-          return res.status(400).send({ message: "Invalid role" });
-        }
-
-        try {
-          const result = await usersCollection.updateOne(
-            { _id: new ObjectId(id) },
-            { $set: { role } }
-          );
-          res.send({ message: `User role updated to ${role}`, result });
-        } catch (error) {
-          console.error("Error updating user role", error);
-          res.status(500).send({ message: "Failed to update user role" });
-        }
+      if (!["admin", "agent", "user"].includes(role)) {
+        return res.status(400).send({ message: "Invalid role" });
       }
-    );
+
+      try {
+        const result = await usersCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { role } }
+        );
+        res.send({ message: `User role updated to ${role}`, result });
+      } catch (error) {
+        console.error("Error updating user role", error);
+        res.status(500).send({ message: "Failed to update user role" });
+      }
+    });
     // get user role by email - useUserRole er email disi tai
     app.get("/users/:email/role", async (req, res) => {
       const email = req.params.email;
@@ -167,7 +170,7 @@ app.post("/properties", verifyFireBaseToken, async (req, res) => {
       res.send(result);
     });
 
-    // user er My profile
+    // user er My profile==================================================amni reke dilm aitari update kroa hoise nise last dike
     app.get("/profile", async (req, res) => {
       const email = req.query.email;
       if (!email) return res.status(400).json({ error: "Email required" });
@@ -195,7 +198,7 @@ app.post("/properties", verifyFireBaseToken, async (req, res) => {
       const query = {
         status: "verified",
         verified: true,
-        ...(location ? { location: { $regex: location, $options: "i" } } : {})
+        ...(location ? { location: { $regex: location, $options: "i" } } : {}),
       };
       // const query = location
       //   ? { location: { $regex: location, $options: "i" } }
@@ -204,7 +207,7 @@ app.post("/properties", verifyFireBaseToken, async (req, res) => {
         sort === "asc" ? { price: 1 } : sort === "desc" ? { price: -1 } : {};
 
       const result = await agentCollection
-        .find( query ,{status: "verified",verified: true,})
+        .find(query, { status: "verified", verified: true })
         .sort(sortOption)
         .toArray();
       res.send(result);
@@ -465,12 +468,8 @@ app.post("/properties", verifyFireBaseToken, async (req, res) => {
       }
     });
 
-
-
-
-
     // Get all users
-    app.get("/users",verifyFireBaseToken,verifyAdmin, async (req, res) => {
+    app.get("/users", verifyFireBaseToken, verifyAdmin, async (req, res) => {
       try {
         const users = await usersCollection.find().toArray();
         res.send(users);
@@ -685,38 +684,38 @@ app.post("/properties", verifyFireBaseToken, async (req, res) => {
     });
 
     // POST: Add to Wishlist=-.................................................
-   app.post("/wishlist", async (req, res) => {
-  const wishlistItem = req.body;
-  const { email, propertyId } = wishlistItem;
+    app.post("/wishlist", async (req, res) => {
+      const wishlistItem = req.body;
+      const { email, propertyId } = wishlistItem;
 
-  try {
-    // 🔍 Convert propertyId to ObjectId if it's a valid id
-    const existing = await wishListCollection.findOne({
-      email,
-      propertyId: new ObjectId(propertyId),
+      try {
+        // 🔍 Convert propertyId to ObjectId if it's a valid id
+        const existing = await wishListCollection.findOne({
+          email,
+          propertyId: new ObjectId(propertyId),
+        });
+
+        if (existing) {
+          return res.status(400).send({
+            success: false,
+            message: "Sorry, this property is already in your wishlist.",
+          });
+        }
+
+        // ✅ Save original propertyId as ObjectId to be consistent
+        wishlistItem.propertyId = new ObjectId(propertyId);
+
+        const result = await wishListCollection.insertOne(wishlistItem);
+        res.send({
+          success: true,
+          message: "Added to wishlist successfully.",
+          data: result,
+        });
+      } catch (error) {
+        console.error("Wishlist insert error:", error);
+        res.status(500).send({ success: false, message: "Server error" });
+      }
     });
-
-    if (existing) {
-      return res.status(400).send({
-        success: false,
-        message: "Sorry, this property is already in your wishlist.",
-      });
-    }
-
-    // ✅ Save original propertyId as ObjectId to be consistent
-    wishlistItem.propertyId = new ObjectId(propertyId);
-
-    const result = await wishListCollection.insertOne(wishlistItem);
-    res.send({
-      success: true,
-      message: "Added to wishlist successfully.",
-      data: result,
-    });
-  } catch (error) {
-    console.error("Wishlist insert error:", error);
-    res.status(500).send({ success: false, message: "Server error" });
-  }
-});
 
     // GET: Wishlist by user email
     app.get("/wishlist", verifyFireBaseToken, async (req, res) => {
@@ -741,8 +740,6 @@ app.post("/properties", verifyFireBaseToken, async (req, res) => {
       });
       res.send(result);
     });
-
-
 
     // agents site ===================
 
@@ -851,11 +848,11 @@ app.post("/properties", verifyFireBaseToken, async (req, res) => {
 
     // ---
     // requested property
-    app.get("/offers/agent",verifyFireBaseToken, async (req, res) => {
+    app.get("/offers/agent", verifyFireBaseToken, async (req, res) => {
       const { email } = req.query;
 
-if(req.decoded.email !== email){
-        return  res.status(403).send({ message: 'forbidden access' })
+      if (req.decoded.email !== email) {
+        return res.status(403).send({ message: "forbidden access" });
       }
 
       try {
@@ -1031,11 +1028,11 @@ if(req.decoded.email !== email){
     });
     // --------
     // GET /sold-properties?agentEmail=agent@gamil.com
-    app.get("/sold-properties",verifyFireBaseToken, async (req, res) => {
+    app.get("/sold-properties", verifyFireBaseToken, async (req, res) => {
       const agentEmail = req.query.agentEmail;
 
-if(req.decoded.email !== agentEmail){
-        return  res.status(403).send({ message: 'forbidden access' })
+      if (req.decoded.email !== agentEmail) {
+        return res.status(403).send({ message: "forbidden access" });
       }
 
       const sold = await offerCollection
@@ -1093,7 +1090,6 @@ if(req.decoded.email !== agentEmail){
       }
     });
 
-
     // Update property payment status
     // app.put("/property/:id/pay", async (req, res) => {
     //   try {
@@ -1124,12 +1120,108 @@ if(req.decoded.email !== agentEmail){
     //   }
     // });
 
+
+    // GET: User profile by email (supports all profile fields)
+    // app.get("/profile", async (req, res) => {
+    //   const email = req.query.email;
+    //   if (!email) return res.status(400).json({ error: "Email required" });
+
+    //   try {
+    //     const user = await usersCollection.findOne({ email });
+    //     if (!user) return res.status(404).json({ error: "User not found" });
+
+    //     res.json({
+    //       name: user.name,
+    //       image: user.image,
+    //       role: user.role,
+    //       email: user.email,
+    //       phone: user.phone || "",
+    //       address: user.address || "",
+    //       joinDate: user.joinDate || user.createdAt || "",
+    //       bio: user.bio || "",
+    //       company: user.company || "",
+    //       website: user.website || "",
+    //       properties: user.properties || 0,
+    //       totalSales: user.totalSales || 0,
+    //     });
+    //   } catch (err) {
+    //     res.status(500).json({ error: "Internal server error" });
+    //   }
+    // });
+    // GET: User profile by email (single definitive route)
+// app.get("/profile", async (req, res) => {
+//   const email = req.query.email;
+//   if (!email) return res.status(400).json({ error: "Email required" });
+
+//   try {
+//     const user = await usersCollection.findOne({ email });
+//     if (!user) return res.status(404).json({ error: "User not found" });
+
+//     res.json({
+//       name: user.name || "",
+//       image: user.image || "",
+//       role: user.role || "user",
+//       email: user.email,
+//       phone: user.phone || "",
+//       address: user.address || "",
+//       joinDate: user.joinDate || user.createdAt || "",
+//       bio: user.bio || "",
+//       company: user.company || "",
+//       website: user.website || "",
+//       properties: user.properties || 0,
+//       totalSales: user.totalSales || 0,
+//     });
+//   } catch (err) {
+//     console.error("GET /profile error:", err);
+//     res.status(500).json({ error: "Internal server error" });
+//   }
+// });
+
+
+    // PUT: Update user profile (supports all editable fields)
+//     app.put("/profile", async (req, res) => {
+//   const { email, name, image, phone, address, bio, company, website } = req.body;
+
+//   if (!email || !name) {
+//     return res.status(400).json({ error: "Email and name are required" });
+//   }
+
+//   try {
+//     const updateDoc = {
+//       $set: {
+//         name,
+//         image,
+//         phone,
+//         address,
+//         bio,
+//         company,
+//         website,
+//       },
+//     };
+
+//     const result = await usersCollection.updateOne({ email }, updateDoc);
+
+//     if (result.modifiedCount > 0) {
+//       res.json({ success: true, message: "Profile updated" });
+//     } else {
+//       res.json({ success: true, message: "No changes made" });
+//     }
+//   } catch (error) {
+//     res.status(500).json({ error: "Server error" });
+//   }
+// });
+
+// PUT: Update user profile (supports all editable fields)
+
+
+
+
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
-
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
