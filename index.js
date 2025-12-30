@@ -4,6 +4,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cors = require("cors");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const admin = require("firebase-admin");
+
 const serviceAccount = require("./firebase-admin-key.json");
 
 const app = express();
@@ -244,7 +245,7 @@ async function run() {
         console.error("Error fetching verified properties:", error);
         res
           .status(500)
-          .send({ message: "Failed to fetch verified properties" });
+          // .send({ message: "Failed to fetch verified properties" });0
       }
     });
 
@@ -261,6 +262,7 @@ async function run() {
         res.status(500).send({ message: "Failed to advertise property" });
       }
     });
+    
     // Replace the existing /properties/advertised endpoint with this:
     app.get("/propertiess/advertised", async (req, res) => {
       try {
@@ -272,7 +274,7 @@ async function run() {
             status: "verified", // or "approved" depending on your schema
           })
           .sort({ createdAt: -1 }) // Sort by latest first
-          .limit(4) // Only return top 3
+          .limit(8) 
           .toArray();
 
         // Transform data to match frontend expectations
@@ -285,6 +287,7 @@ async function run() {
           verified: property.verified,
           agentName: property.agentName,
         }));
+        console.log(transformed);
 
         res.send(transformed);
       } catch (error) {
@@ -302,7 +305,7 @@ async function run() {
         const latestReviews = await reviewsCollection
           .find()
           .sort({ date: -1 }) // Sort by latest first
-          .limit(3) // Only return top 3
+          .limit(8) // Only return top 3
           .toArray();
 
         res.send(latestReviews);
@@ -364,7 +367,7 @@ async function run() {
           .sort({ date: -1 }) // Sort by newest first
           .toArray();
 
-        res.status(200).json(reviews);
+        res.status(200).json(reviews)
       } catch (error) {
         console.error("Error fetching reviews:", error);
         res.status(500).json({ error: "Failed to fetch reviews" });
