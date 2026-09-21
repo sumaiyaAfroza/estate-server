@@ -41,6 +41,7 @@ async function run() {
     const reviewsCollection = db.collection("reviews");
     const offerCollection = db.collection("offers");
     const propertyCollection = db.collection("property");
+    const appointmentCollection = db.collection("appointments");
 
     // jwt token
     const verifyFireBaseToken = async (req, res, next) => {
@@ -212,6 +213,20 @@ async function run() {
         .sort(sortOption)
         .toArray();
       res.send(result);
+    });
+
+    // Increment view counter for a property
+    app.post("/properties/:id/views", async (req, res) => {
+      try {
+        const id = new ObjectId(req.params.id);
+        await agentCollection.updateOne(
+          { _id: id },
+          { $inc: { views: 1 } }
+        );
+        res.json({ success: true });
+      } catch (error) {
+        res.status(500).json({ error: "Failed to increment view" });
+      }
     });
 
     // property Details
@@ -1219,6 +1234,29 @@ async function run() {
 
 
 
+
+    // Appointment booking endpoints
+    app.post("/appointments", verifyFireBaseToken, async (req, res) => {
+      try {
+        const appointment = req.body;
+        appointment.createdAt = new Date();
+        const result = await appointmentCollection.insertOne(appointment);
+        res.json({ success: true, insertedId: result.insertedId });
+      } catch (error) {
+        res.status(500).json({ error: "Failed to book appointment" });
+      }
+    });
+
+    app.get("/appointments", verifyFireBaseToken, async (req, res) => {
+      try {
+        const { email } = req.query;
+        const query = email ? { agentEmail: email } : {};
+        const appointments = await appointmentCollection.find(query).toArray();
+        res.json(appointments);
+      } catch (error) {
+        res.status(500).json({ error: "Failed to fetch appointments" });
+      }
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
