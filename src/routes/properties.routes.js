@@ -17,5 +17,6 @@ router.get("/properties/:id", ctrl(propsCtrl.getById));
 router.patch("/properties/verify/:id", ctrl(propsCtrl.verifyProperty));
 router.patch("/properties/reject/:id", ctrl(propsCtrl.rejectProperty));
 router.patch("/properties/advertise/:id", ctrl(propsCtrl.advertiseProperty));
+router.patch("/properties/fix-price/:id", ctrl(propsCtrl.fixPrice));
 
 module.exports = router;

@@ -99,3 +99,29 @@ exports.getWishlistProperty = ctrl(async (req, res, db) => {
   if (!prop) return res.status(404).json({ error: "Property not found" });
   res.send(prop);
 });
+
+// PATCH /properties/fix-price/:id — repair a property with malformed price field
+exports.fixPrice = ctrl(async (req, res, db) => {
+  const { id } = req.params;
+  const doc = await db.collections.agents.findOne({ _id: ObjectId(id) });
+  if (!doc) return res.status(404).json({ error: "Property not found" });
+  const badPrice = doc.price;
+  if (badPrice && typeof badPrice === "object" && typeof badPrice.min === "number") {
+    return res.json({ success: true, message: "Price already valid", id });
+  }
+  // Generate safe defaults based on available data
+  const defaultPrice = { min: 0, max: 0 };
+  const result = await db.collections.agents.updateOne(
+    { _id: ObjectId(id) },
+    { $set: { price: defaultPrice } }
+  );
+  // Also sync to property collection
+  await db.collections.property.updateOne(
+    { _id: ObjectId(id) },
+    { $set: { price: defaultPrice } }
+  );
+  res.json({ success: true, message: `Fixed price for ${result.modifiedCount > 0 ? "agent+property" : "agent only"}`, id });
+});
+
+
+module.exports = exports;
