@@ -46,6 +46,12 @@ async function start() {
   // Attach collections and client to app locals for controllers that need them
   app.locals.db = { collections: db, client };
 
+  // Make db available on every request via req.db
+  app.use((req, _res, next) => {
+    req.db = app.locals.db;
+    next();
+  });
+
   // Ping MongoDB to verify connection
   await db.db("admin").command({ ping: 1 });
   console.log("Pinged your deployment. You successfully connected to MongoDB!");
