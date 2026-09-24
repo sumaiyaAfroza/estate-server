@@ -11,7 +11,8 @@ router.post("/reviews", ctrl(revCtrl.createReview));
 router.delete("/reviews/:id", ctrl(revCtrl.remove));
 
 // Authenticated user own reviews
-router.get("/myReviews", verifyFirebaseToken, async (req, res, db) => {
+router.get("/myReviews", verifyFirebaseToken, async (req, res) => {
+  const { db } = req;
   const email = req.query.email;
   if (req.decoded.email !== email) {
     return res.status(403).send({ message: "forbidden access" });
