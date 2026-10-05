@@ -26,6 +26,7 @@ async function connect() {
       offers: db.collection("offers"),
       property: db.collection("property"),
       appointments: db.collection("appointments"),
+      blogs: db.collection("blogs"),
     },
     ObjectId,
   };

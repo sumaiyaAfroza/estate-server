@@ -15,6 +15,7 @@ const offersRoutes = require("./src/routes/offers.routes");
 const wishlistRoutes = require("./src/routes/wishlist.routes");
 const appointmentsRoutes = require("./src/routes/appointments.routes");
 const paymentsRoutes = require("./src/routes/payments.routes");
+const blogsRoutes = require("./src/routes/blogs.routes");
 
 // ─── Firebase Admin SDK ──────────────────────────────────────
 admin.initializeApp({
@@ -37,6 +38,7 @@ app.use("/", offersRoutes);
 app.use("/", wishlistRoutes);
 app.use("/", appointmentsRoutes);
 app.use("/", paymentsRoutes);
+app.use("/", blogsRoutes);
 
 app.get("/", (req, res) => res.send("hello estate properties"));
 
