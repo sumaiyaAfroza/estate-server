@@ -1,5 +1,5 @@
 const { ObjectId } = require("mongodb");
-const { uniqueSlug } = require("../../utils/slug");
+const { uniqueSlug } = require("../utils/slug");
 
 const ctrl = (fn) => async (req, res, db) => {
   try {
