@@ -20,3 +20,7 @@ router.get("/dashboard/blogs", verifyFirebaseToken, verifyAdmin, ctrl(blogsCtrl.
 router.delete("/blogs/:slug", verifyFirebaseToken, verifyAdmin, ctrl(blogsCtrl.deletePost));
 
 module.exports = router;
+
+
+
+// hlw blog
