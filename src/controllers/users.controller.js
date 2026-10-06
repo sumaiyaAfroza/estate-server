@@ -1,13 +1,5 @@
 const { ObjectId } = require("mongodb");
-const ctrl = (fn) => async (req, res) => {
-  try {
-    await fn(req, res);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "internal server error" });
-  }
-};
-exports.ctrl = ctrl;
+const { ctrl } = require("../utils/ctrl");
 
 // ─── Users ───────────────────────────────────────────────
 

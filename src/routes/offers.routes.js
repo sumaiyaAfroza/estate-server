@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { verifyFirebaseToken } = require("../../middlewares/auth");
-const offCtrl = require("../../controllers/offers.controller");
-const { ctrl } = require("../../controllers/offers.controller");
+const { verifyFirebaseToken } = require("../middlewares/auth");
+const offCtrl = require("../controllers/offers.controller");
+const { ctrl } = require("../utils/ctrl");
 
 router.post("/offers", ctrl(offCtrl.createOffer));
 router.get("/offers", verifyFirebaseToken, ctrl(offCtrl.getOffers));

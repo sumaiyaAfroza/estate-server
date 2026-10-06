@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { verifyFirebaseToken } = require("../../middlewares/auth");
-const agentsCtrl = require("../../controllers/agents.controller");
-const { ctrl } = require("../../controllers/agents.controller");
+const { verifyFirebaseToken } = require("../middlewares/auth");
+const agentsCtrl = require("../controllers/agents.controller");
+const { ctrl } = require("../utils/ctrl");
 
 // Add property (public — form sends data with metadata)
 router.post("/addProperty", ctrl(agentsCtrl.addProperty));

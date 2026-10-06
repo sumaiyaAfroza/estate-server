@@ -1,12 +1,17 @@
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const { ObjectId } = require("mongodb");
-const ctrl = (fn) => async (req, res, db) => {
-  try {
-    await fn(req, res, db);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "internal server error" });
+const { ctrl } = require("../utils/ctrl");
+
+// Initialise Stripe lazily. Doing this at module load throws when
+// STRIPE_SECRET_KEY is absent, which would crash the whole server on boot.
+let stripeClient = null;
+const getStripe = () => {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error("STRIPE_SECRET_KEY is not configured");
   }
+  if (!stripeClient) {
+    stripeClient = require("stripe")(process.env.STRIPE_SECRET_KEY);
+  }
+  return stripeClient;
 };
 
 // POST  /create-payment-intent
@@ -17,7 +22,7 @@ exports.createPaymentIntent = ctrl(async (req, res, db) => {
   }
   const property = await db.collections.agents.findOne({ _id: ObjectId(propertyId) });
   if (!property) return res.status(404).json({ error: "Property not found" });
-  const paymentIntent = await stripe.paymentIntents.create({
+  const paymentIntent = await getStripe().paymentIntents.create({
     amount: amountInCents,
     currency: "usd",
     payment_method_types: ["card"],

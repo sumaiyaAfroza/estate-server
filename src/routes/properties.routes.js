@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { verifyFirebaseToken } = require("../../middlewares/auth");
-const propsCtrl = require("../../controllers/properties.controller");
-const { ctrl } = require("../../controllers/properties.controller");
+const { verifyFirebaseToken } = require("../middlewares/auth");
+const propsCtrl = require("../controllers/properties.controller");
+const { ctrl } = require("../utils/ctrl");
 
 // Public listing endpoints
 router.get("/allProperties", ctrl(propsCtrl.getAllVerified));

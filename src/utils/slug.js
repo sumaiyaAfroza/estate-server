@@ -15,7 +15,7 @@ const makeSlug = (title) =>
  */
 const uniqueSlug = async (db, title, excludeId) => {
   let slug = makeSlug(title);
-  const existing = await db.blogs.findOne({ slug });
+  const existing = await db.collections.blogs.findOne({ slug });
   if (!existing) return slug;
   // Append timestamp to guarantee uniqueness
   return `${slug}-${Date.now().toString(36)}`;

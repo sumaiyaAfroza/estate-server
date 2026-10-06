@@ -1,12 +1,5 @@
 const { ObjectId } = require("mongodb");
-const ctrl = (fn) => async (req, res, db) => {
-  try {
-    await fn(req, res, db);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "internal server error" });
-  }
-};
+const { ctrl } = require("../utils/ctrl");
 
 // POST  /wishlist
 exports.add = ctrl(async (req, res, db) => {

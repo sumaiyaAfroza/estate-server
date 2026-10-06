@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { verifyFirebaseToken } = require("../../middlewares/auth");
-const revCtrl = require("../../controllers/reviews.controller");
-const { ctrl } = require("../../controllers/reviews.controller");
+const { verifyFirebaseToken } = require("../middlewares/auth");
+const revCtrl = require("../controllers/reviews.controller");
+const { ctrl } = require("../utils/ctrl");
 
 router.get("/reviews/latest", ctrl(revCtrl.getLatestReviews));
 router.get("/reviews", ctrl(revCtrl.getByProperty));

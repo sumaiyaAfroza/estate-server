@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { verifyFirebaseToken, verifyAdmin } = require("../../middlewares/auth");
-const usersCtrl = require("../../controllers/users.controller");
-const { ctrl } = require("../../controllers/users.controller");
+const { verifyFirebaseToken, verifyAdmin } = require("../middlewares/auth");
+const usersCtrl = require("../controllers/users.controller");
+const { ctrl } = require("../utils/ctrl");
 
 // Admin-only routes
 router.patch("/users/:id/fraud", verifyFirebaseToken, ctrl(usersCtrl.markFraudById));
